@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { isResult, Process } from '../os/kernel';
 import { Program, programKind } from '../os/programs';
-import { Button, Card, Chip, Field, Mono, Row } from './components';
+import { Body, Button, Card, Chip, Field, Mono, Row } from './components';
 import { useKernel } from './KernelContext';
 import { ResultView } from './ResultView';
 import { colors, spacing } from './theme';
@@ -37,7 +37,7 @@ export function ProgramsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.md }} keyboardShouldPersistTaps="handled">
-      <Card title="/bin — programs on the APQB hardware">
+      <Card title="Programs">
         <Row>
           {names.map((n) => (
             <Chip key={n} title={n} active={n === selected} onPress={() => { setSelected(n); setProc(null); }} />
@@ -45,7 +45,7 @@ export function ProgramsScreen() {
         </Row>
       </Card>
       <Card title={`${prog.name}  (${programKind(prog)})`}>
-        <Mono color={colors.dim}>{prog.description}</Mono>
+        <Body>{prog.description}</Body>
         <Mono color={colors.dim} style={{ fontSize: 11, marginBottom: spacing.sm }}>{`usage: ${prog.usage}`}</Mono>
         <Row>
           {prog.params.map((p) => (
@@ -59,8 +59,8 @@ export function ProgramsScreen() {
           ) : null}
         </Row>
         <Row>
-          <Button title="▶ run" onPress={run} />
-          {programKind(prog) === 'circuit' ? <Button title="draw" kind="ghost" onPress={() => { try { const c = prog.circuit!(buildArgv(prog, vals)); setProc(Object.assign(new Process(0, prog.name, [], prog, 5, 0), { circuit: c, state: 'done' as const, logs: [`${c.name}: ${c.numQubits} qubits, ${c.length} instructions, depth ${c.depth}`] })); } catch (e) { setProc(Object.assign(new Process(0, prog.name, [], prog, 5, 0), { state: 'failed' as const, error: (e as Error).message })); } }} /> : null}
+          <Button title="Run" onPress={run} />
+          {programKind(prog) === 'circuit' ? <Button title="Draw" kind="ghost" onPress={() => { try { const c = prog.circuit!(buildArgv(prog, vals)); setProc(Object.assign(new Process(0, prog.name, [], prog, 5, 0), { circuit: c, state: 'done' as const, logs: [`${c.name}: ${c.numQubits} qubits, ${c.length} instructions, depth ${c.depth}`] })); } catch (e) { setProc(Object.assign(new Process(0, prog.name, [], prog, 5, 0), { state: 'failed' as const, error: (e as Error).message })); } }} /> : null}
         </Row>
       </Card>
       {proc ? (

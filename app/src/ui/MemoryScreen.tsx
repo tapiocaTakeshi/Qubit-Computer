@@ -4,7 +4,7 @@ import { APQB } from '../core/apqb';
 import * as G from '../core/gates';
 import { Kernel, Segment } from '../os/kernel';
 import { num } from '../os/programs';
-import { Button, Card, Chip, Field, Histogram, KV, Label, Mono, ReadoutTable, Row } from './components';
+import { Body, Button, Card, Chip, Field, Histogram, KV, Label, Mono, ReadoutTable, Row } from './components';
 import { useKernel } from './KernelContext';
 import { EntanglementView } from './ResultView';
 import { colors, spacing } from './theme';
@@ -45,15 +45,15 @@ function SegmentCard({ seg, kernel, onError }: { seg: Segment; kernel: Kernel; o
       <Row>
         <Field label={`targets (${arity})`} value={targets} onChangeText={setTargets} />
         {needsParam ? <Field label={gate === 'apqb_r' ? 'r' : gate === 'apqb' ? 'θ' : 'angle'} value={param} onChangeText={setParam} /> : null}
-        <Button title="apply" small onPress={() => safe(() => { kernel.sysApply(seg.sid, gate, targets.split(',').map((t) => Math.round(num(t))), needsParam ? [num(param)] : []); setCounts(null); setOutcome(null); })} />
+        <Button title="Apply" small onPress={() => safe(() => { kernel.sysApply(seg.sid, gate, targets.split(',').map((t) => Math.round(num(t))), needsParam ? [num(param)] : []); setCounts(null); setOutcome(null); })} />
       </Row>
       <Label>measure</Label>
       <Row>
         <Field label="shots" value={shots} onChangeText={setShots} keyboardType="number-pad" />
-        <Button title="sample" small kind="ghost" onPress={() => safe(() => { const r = kernel.sysMeasure(seg.sid, undefined, Math.max(2, parseInt(shots, 10) || 2)); setCounts(r.counts ?? null); })} />
-        <Button title="measure (collapse)" small onPress={() => safe(() => { const r = kernel.sysMeasure(seg.sid); setOutcome(r.outcome ?? null); setCounts(null); })} />
-        <Button title="reset" small kind="ghost" onPress={() => safe(() => { kernel.sysReset(seg.sid); setCounts(null); setOutcome(null); })} />
-        <Button title="free" small kind="danger" onPress={() => safe(() => kernel.sysFree(seg.sid))} />
+        <Button title="Sample" small kind="ghost" onPress={() => safe(() => { const r = kernel.sysMeasure(seg.sid, undefined, Math.max(2, parseInt(shots, 10) || 2)); setCounts(r.counts ?? null); })} />
+        <Button title="Measure" small onPress={() => safe(() => { const r = kernel.sysMeasure(seg.sid); setOutcome(r.outcome ?? null); setCounts(null); })} />
+        <Button title="Reset" small kind="ghost" onPress={() => safe(() => { kernel.sysReset(seg.sid); setCounts(null); setOutcome(null); })} />
+        <Button title="Free" small kind="danger" onPress={() => safe(() => kernel.sysFree(seg.sid))} />
       </Row>
       {outcome ? <Mono color={colors.warn}>{`outcome ${outcome} — register collapsed`}</Mono> : null}
       {counts ? <Histogram counts={counts} /> : null}
@@ -86,7 +86,7 @@ export function MemoryScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.md }} keyboardShouldPersistTaps="handled">
-      <Card title="qubit memory">
+      <Card title="Qubit Memory">
         <KV k="physical qubits" v={String(mem.total)} />
         <KV k="allocated" v={String(mem.used)} color={colors.warn} />
         <KV k="free" v={String(mem.free)} color={colors.ok} />
@@ -96,7 +96,7 @@ export function MemoryScreen() {
           ))}
         </View>
       </Card>
-      <Card title="alloc — a new APQB register">
+      <Card title="New Register">
         <Row>
           <Field label="qubits" value={n} onChangeText={setN} keyboardType="number-pad" />
           <Field label="name" value={name} onChangeText={setName} placeholder="auto" />
@@ -108,7 +108,7 @@ export function MemoryScreen() {
         </Row>
         {mode !== 'zero' ? <Field label={mode === 'theta' ? 'θ₀,θ₁,…' : 'r₀,r₁,…'} value={init} onChangeText={setInit} /> : null}
         <Row>
-          <Button title="alloc" onPress={alloc} />
+          <Button title="Allocate" onPress={alloc} />
           {error ? <Mono color={colors.danger}>{error}</Mono> : null}
         </Row>
       </Card>

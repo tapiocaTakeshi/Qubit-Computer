@@ -34,9 +34,9 @@ export function BlochCircle({ theta, size = 220, extra }: { theta: number; size?
 }
 
 const styles = StyleSheet.create({
-  circle: { position: 'absolute', borderWidth: 1.5, borderColor: colors.border },
-  axis: { position: 'absolute', backgroundColor: colors.border },
+  circle: { position: 'absolute', borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.2)' },
+  axis: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.15)' },
   arrow: { position: 'absolute', height: 2, backgroundColor: colors.accent, transformOrigin: 'left center' },
-  dot: { position: 'absolute', width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.bg },
+  dot: { position: 'absolute', width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#ffffff' },
   tick: { position: 'absolute', color: colors.dim, fontFamily: mono, fontSize: 10 },
 });

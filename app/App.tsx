@@ -7,15 +7,15 @@ import { MemoryScreen } from './src/ui/MemoryScreen';
 import { ProgramsScreen } from './src/ui/ProgramsScreen';
 import { SystemScreen } from './src/ui/SystemScreen';
 import { TerminalScreen } from './src/ui/TerminalScreen';
-import { colors, mono } from './src/ui/theme';
+import { colors, sans } from './src/ui/theme';
 
 type Tab = 'terminal' | 'programs' | 'memory' | 'apqb' | 'system';
-const TABS: Array<{ id: Tab; label: string; icon: string }> = [
-  { id: 'terminal', label: 'qsh', icon: '>_' },
-  { id: 'programs', label: 'run', icon: '▶' },
-  { id: 'memory', label: 'memory', icon: '▦' },
-  { id: 'apqb', label: 'APQB', icon: 'θ' },
-  { id: 'system', label: 'system', icon: '⚙' },
+const TABS: Array<{ id: Tab; label: string; icon: string; title: string }> = [
+  { id: 'terminal', label: 'Terminal', icon: '>_', title: 'Terminal' },
+  { id: 'programs', label: 'Programs', icon: '▶', title: 'Programs' },
+  { id: 'memory', label: 'Memory', icon: '▦', title: 'Qubit Memory' },
+  { id: 'apqb', label: 'APQB', icon: 'θ', title: 'APQB' },
+  { id: 'system', label: 'System', icon: '⚙', title: 'System' },
 ];
 
 export default function App() {
@@ -23,10 +23,10 @@ export default function App() {
   return (
     <KernelProvider>
       <SafeAreaView style={styles.safe}>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <View style={styles.header}>
-          <Text style={styles.title}>QubitOS</Text>
-          <Text style={styles.subtitle}>|ψ(θ)⟩ = cosθ|0⟩ + sinθ|1⟩ · r = cos2θ · η = |sin2θ|</Text>
+          <Text style={styles.title}>{TABS.find((t) => t.id === tab)?.title}</Text>
+          <Text style={styles.subtitle}>QubitOS · |ψ(θ)⟩ = cosθ|0⟩ + sinθ|1⟩</Text>
         </View>
         <View style={styles.body}>
           <View style={[styles.screen, tab !== 'terminal' && styles.hidden]}><TerminalScreen /></View>
@@ -50,15 +50,15 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
-  title: { color: colors.accent, fontFamily: mono, fontSize: 18, fontWeight: '700' },
-  subtitle: { color: colors.dim, fontFamily: mono, fontSize: 10, marginTop: 2 },
+  header: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8, alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: 'rgba(255,255,255,0.9)' },
+  title: { fontFamily: sans, color: colors.text, fontSize: 17, fontWeight: '600' },
+  subtitle: { fontFamily: sans, color: colors.dim, fontSize: 11, marginTop: 1 },
   body: { flex: 1 },
   screen: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   hidden: { display: 'none' },
-  tabBar: { flexDirection: 'row', borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 8 },
-  tabIcon: { color: colors.dim, fontFamily: mono, fontSize: 16 },
-  tabLabel: { color: colors.dim, fontSize: 10, marginTop: 2 },
+  tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: 'rgba(255,255,255,0.95)', paddingBottom: 4 },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 7 },
+  tabIcon: { fontFamily: sans, color: colors.dim, fontSize: 17 },
+  tabLabel: { fontFamily: sans, color: colors.dim, fontSize: 10, marginTop: 2 },
   tabActive: { color: colors.accent },
 });

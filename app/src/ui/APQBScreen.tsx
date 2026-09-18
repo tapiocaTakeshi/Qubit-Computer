@@ -4,14 +4,14 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { APQB } from '../core/apqb';
 import * as Q from '../core/qbnn';
 import { BlochCircle } from './BlochCircle';
-import { Button, Card, KV, Label, Mono, Row } from './components';
+import { Body, Button, Card, KV, Label, Mono, Row } from './components';
 import { useKernel } from './KernelContext';
 import { colors, spacing } from './theme';
 
 function Bar({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <Row style={{ marginVertical: 2 }}>
-      <Mono color={colors.dim} style={{ width: 70 }}>{label}</Mono>
+      <Mono color={colors.dim} style={{ width: 96 }}>{label}</Mono>
       <View style={styles.track}>
         <View style={[styles.zero]} />
         <View style={[styles.fill, { backgroundColor: color, left: value >= 0 ? '50%' : `${50 + 50 * value}%`, width: `${50 * Math.abs(value)}%` }]} />
@@ -32,7 +32,7 @@ export function APQBScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.md }}>
-      <Card title="APQB — adjustable pseudo quantum bit">
+      <Card title="Adjustable Pseudo Quantum Bit">
         <Mono color={colors.accent} style={{ fontSize: 15 }}>{`|ψ(θ)⟩ = ${c.toFixed(4)}|0⟩ + ${s.toFixed(4)}|1⟩`}</Mono>
         <Label>θ = {theta.toFixed(4)} rad ({((theta * 180) / Math.PI).toFixed(1)}°)</Label>
         <Slider minimumValue={0} maximumValue={Math.PI / 2} value={theta} onValueChange={setTheta} minimumTrackTintColor={colors.accent} maximumTrackTintColor={colors.border} thumbTintColor={colors.accent} />
@@ -54,16 +54,16 @@ export function APQBScreen() {
         <KV k="z = e^{i2θ}" v={`${q.z.re >= 0 ? '+' : ''}${q.z.re.toFixed(4)} ${q.z.im >= 0 ? '+' : '−'} ${Math.abs(q.z.im).toFixed(4)}i`} />
         <KV k="Bloch (x, y, z)" v={`(${q.bloch.map((v) => v.toFixed(3)).join(', ')})`} />
       </Card>
-      <Card title="η as a control signal (paper Eq. 11 / 32)">
+      <Card title="η as a Control Signal (Eq. 11 / 32)">
         <KV k="temperature τ(η) on [0.1, 1.0]" v={Q.controlSignal(eta, 0.1, 1.0)} color={colors.warn} />
         <KV k="dropout p(η) on [0.0, 0.5]" v={Q.controlSignal(eta, 0, 0.5)} color={colors.warn} />
         <KV k="scheduler eps(η) on [p_min, p_max]" v={Q.controlSignal(eta, Number(kernel.sysctl['sched.p_min']), Number(kernel.sysctl['sched.p_max']))} color={colors.warn} />
         <Row style={{ marginTop: spacing.sm }}>
-          <Button title="use as system APQB (sysctl apqb.theta)" small onPress={() => kernel.sysSysctl('apqb.theta', String(theta))} />
+          <Button title="Use as system APQB" small onPress={() => kernel.sysSysctl('apqb.theta', String(theta))} />
         </Row>
         <Mono color={colors.dim} style={{ fontSize: 11, marginTop: 4 }}>{`current system APQB θ=${kernel.systemAPQB().theta.toFixed(3)} → eps=${kernel.explorationRate().toFixed(3)}`}</Mono>
       </Card>
-      <Card title="Chebyshev harmonic features (Prop. 2)">
+      <Card title="Chebyshev Features (Prop. 2)">
         {re.map((v, k) => (
           <Bar key={`re${k}`} label={`Re z^${k + 1}`} value={v} color={colors.accent} />
         ))}

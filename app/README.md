@@ -1,6 +1,6 @@
 # QubitOS for React Native
 
-**Qubit Computer / QubitOS の React Native（Expo）アプリ版。** APQB 量子コンピュータのシミュレータと OS カーネルを TypeScript に移植し、スマートフォン上でそのまま動かします。ネイティブ依存は AsyncStorage（仮想ファイルシステムの永続化）と Slider だけです。
+**Qubit Computer / QubitOS の React Native（Expo）アプリ版。** APQB 量子コンピュータのシミュレータと OS カーネルを TypeScript に移植し、スマートフォン上でそのまま動かします。ネイティブ依存は AsyncStorage（仮想ファイルシステムの永続化）と Slider だけです。見た目は macOS 風のシンプルなライトデザイン（システムフォント、白いパネル、ヘアライン境界、青いアクセント。ターミナルは macOS Terminal 風のウィンドウ）です。
 
 ```text
 app/

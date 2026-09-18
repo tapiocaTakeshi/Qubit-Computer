@@ -2,7 +2,7 @@ import Slider from '@react-native-community/slider';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import * as Q from '../core/qbnn';
-import { Button, Card, Chip, Field, KV, Label, Mono, Row } from './components';
+import { Body, Button, Card, Chip, Field, KV, Label, Mono, Row } from './components';
 import { useKernel } from './KernelContext';
 import { colors, spacing } from './theme';
 
@@ -21,21 +21,21 @@ export function SystemScreen() {
         <KV k="processes" v={String(kernel.processes.size)} />
         <KV k="programs in /bin" v={String(u.programs.length)} />
       </Card>
-      <Card title="APQB scheduler — sysctl apqb.theta">
-        <Mono color={colors.dim} style={{ fontSize: 12 }}>eps = p_min + (p_max − p_min)·η(θ): explore a random READY process with probability eps, else run the highest priority.</Mono>
+      <Card title="APQB Scheduler">
+        <Body color={colors.dim} style={{ fontSize: 12 }}>eps = p_min + (p_max − p_min)·η(θ): explore a random READY process with probability eps, else run the highest priority.</Body>
         <Label>θ = {theta.toFixed(3)}  r = {sys.r.toFixed(3)}  η = {sys.T.toFixed(3)}  →  eps = {kernel.explorationRate().toFixed(3)}</Label>
         <Slider minimumValue={0} maximumValue={Math.PI / 2} value={theta} onSlidingComplete={(v) => kernel.sysSysctl('apqb.theta', String(v))} minimumTrackTintColor={colors.warn} maximumTrackTintColor={colors.border} thumbTintColor={colors.warn} />
       </Card>
       <Row style={{ marginBottom: spacing.md }}>
-        <Chip title="processes" active={tab === 'proc'} onPress={() => setTab('proc')} />
-        <Chip title="qbnn" active={tab === 'qbnn'} onPress={() => setTab('qbnn')} />
-        <Chip title="dmesg" active={tab === 'dmesg'} onPress={() => setTab('dmesg')} />
-        <Chip title="filesystem" active={tab === 'fs'} onPress={() => setTab('fs')} />
+        <Chip title="Processes" active={tab === 'proc'} onPress={() => setTab('proc')} />
+        <Chip title="QBNN" active={tab === 'qbnn'} onPress={() => setTab('qbnn')} />
+        <Chip title="Kernel Log" active={tab === 'dmesg'} onPress={() => setTab('dmesg')} />
+        <Chip title="Files" active={tab === 'fs'} onPress={() => setTab('fs')} />
       </Row>
       {tab === 'proc' ? <ProcessPanel /> : null}
       {tab === 'qbnn' ? <QBNNPanel /> : null}
       {tab === 'dmesg' ? (
-        <Card title="dmesg">
+        <Card title="Kernel Log">
           {kernel.sysDmesg(60).map((l, i) => (
             <Mono key={i} style={{ fontSize: 11 }}>{l}</Mono>
           ))}
@@ -57,19 +57,19 @@ function ProcessPanel() {
     kernel.sysSpawn('bell_apqb', ['0.3'], 7, 64);
   };
   return (
-    <Card title="process table">
+    <Card title="Processes">
       <Row style={{ marginBottom: spacing.sm }}>
-        <Button title="spawn 4 demo jobs" small kind="ghost" onPress={demo} />
-        <Button title="sched (run ready queue)" small onPress={() => kernel.sysSchedule()} />
-        <Button title="step 1" small kind="ghost" onPress={() => kernel.sysSchedule(1)} />
+        <Button title="Spawn demo jobs" small kind="ghost" onPress={demo} />
+        <Button title="Run scheduler" small onPress={() => kernel.sysSchedule()} />
+        <Button title="Step" small kind="ghost" onPress={() => kernel.sysSchedule(1)} />
       </Row>
       <Mono color={colors.dim} style={{ fontSize: 11 }}>{' PID  STATE    PRI   ELAPSED  COMMAND'}</Mono>
       {procs.length ? procs.map((p) => (
         <Row key={p.pid} style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-          <Mono style={{ fontSize: 11, flex: 1 }} color={p.state === 'failed' ? colors.danger : p.state === 'ready' ? colors.warn : p.state === 'done' ? colors.ok : colors.text}>{p.row()}</Mono>
-          {p.state === 'ready' ? <Button title="kill" small kind="danger" onPress={() => kernel.sysKill(p.pid)} /> : null}
+          <Mono style={{ fontSize: 11, flex: 1 }} color={p.state === 'failed' ? colors.danger : p.state === 'ready' ? colors.warn : p.state === 'killed' ? colors.dim : colors.text}>{p.row()}</Mono>
+          {p.state === 'ready' ? <Button title="Kill" small kind="danger" onPress={() => kernel.sysKill(p.pid)} /> : null}
         </Row>
-      )) : <Mono color={colors.dim}>(none yet — run a program or spawn demo jobs)</Mono>}
+      )) : <Body color={colors.dim}>No processes yet. Run a program or spawn the demo jobs.</Body>}
     </Card>
   );
 }
@@ -110,7 +110,7 @@ function QBNNPanel() {
 
   const loss = history[history.length - 1];
   return (
-    <Card title="QBNN — multiplicative APQB gating (Eq. 23–30)">
+    <Card title="QBNN Training (Eq. 23–30)">
       <Row>
         <Chip title="XOR" active={task === 'xor'} onPress={() => setTask('xor')} />
         <Chip title="3-bit parity" active={task === 'parity'} onPress={() => setTask('parity')} />
@@ -119,7 +119,7 @@ function QBNNPanel() {
         <Field label="epochs" value={epochs} onChangeText={setEpochs} keyboardType="number-pad" />
       </Row>
       <Row>
-        <Button title={running ? 'training…' : '▶ train'} onPress={start} disabled={running} />
+        <Button title={running ? 'Training…' : 'Train'} onPress={start} disabled={running} />
         <Button title="λ=0 (plain NN)" small kind="ghost" onPress={() => setLam('0')} />
       </Row>
       {history.length ? (
@@ -156,7 +156,7 @@ function FSPanel({ onReset }: { onReset: () => Promise<void> }) {
     content = (e as Error).message;
   }
   return (
-    <Card title="QubitFS (persisted with AsyncStorage)">
+    <Card title="Filesystem">
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <Mono style={{ fontSize: 11 }}>{['/', ...kernel.fs.tree('/')].join('\n')}</Mono>
       </ScrollView>
@@ -165,7 +165,7 @@ function FSPanel({ onReset }: { onReset: () => Promise<void> }) {
         <Mono color={colors.accent2} style={{ fontSize: 11 }}>{content}</Mono>
       </ScrollView>
       <Row style={{ marginTop: spacing.sm }}>
-        <Button title="reset filesystem" small kind="danger" onPress={() => { onReset().catch(() => undefined); }} />
+        <Button title="Reset Filesystem" small kind="danger" onPress={() => { onReset().catch(() => undefined); }} />
       </Row>
     </Card>
   );

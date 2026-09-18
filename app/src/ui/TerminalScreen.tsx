@@ -3,7 +3,7 @@ import { FlatList, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text,
 import { Shell } from '../os/shell';
 import { Chip, Mono } from './components';
 import { useKernel } from './KernelContext';
-import { colors, mono, spacing } from './theme';
+import { colors, mono, radius, sans, spacing } from './theme';
 
 interface Line {
   id: number;
@@ -59,6 +59,16 @@ export function TerminalScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80}>
+      <View style={styles.window}>
+      <View style={styles.titleBar}>
+        <View style={styles.lights}>
+          <View style={[styles.light, { backgroundColor: '#ff5f57' }]} />
+          <View style={[styles.light, { backgroundColor: '#febc2e' }]} />
+          <View style={[styles.light, { backgroundColor: '#28c840' }]} />
+        </View>
+        <Text style={styles.windowTitle}>qsh — QubitOS</Text>
+        <View style={{ width: 52 }} />
+      </View>
       <FlatList
         ref={listRef}
         data={lines}
@@ -68,11 +78,6 @@ export function TerminalScreen() {
         renderItem={({ item }) => <Mono color={item.kind === 'cmd' ? colors.accent : item.kind === 'err' ? colors.danger : colors.text}>{item.text || ' '}</Mono>}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
       />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quick} contentContainerStyle={{ gap: 6, paddingHorizontal: spacing.sm }} keyboardShouldPersistTaps="always">
-        {QUICK.map((q) => (
-          <Chip key={q} title={q} onPress={() => submit(q)} />
-        ))}
-      </ScrollView>
       <View style={styles.inputRow}>
         <Text style={styles.prompt}>{shell.prompt()}</Text>
         <TextInput
@@ -91,18 +96,29 @@ export function TerminalScreen() {
             if (e.nativeEvent.key === 'ArrowDown') recall(-1);
           }}
         />
-        <Text style={styles.enter} onPress={() => submit()}>⏎</Text>
+        <Text style={styles.enter} onPress={() => submit()}>↩</Text>
       </View>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quick} contentContainerStyle={{ gap: 6, paddingHorizontal: spacing.sm }} keyboardShouldPersistTaps="always">
+        {QUICK.map((q) => (
+          <Chip key={q} title={q} onPress={() => submit(q)} />
+        ))}
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1, backgroundColor: colors.bg, padding: spacing.md },
+  window: { flex: 1, backgroundColor: colors.panel, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.15)', overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  titleBar: { height: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, backgroundColor: '#ececec', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.15)' },
+  lights: { flexDirection: 'row', gap: 8, width: 52 },
+  light: { width: 12, height: 12, borderRadius: 6 },
+  windowTitle: { fontFamily: sans, color: '#4d4d4d', fontSize: 13, fontWeight: '600' },
   output: { flex: 1 },
-  quick: { maxHeight: 40, paddingVertical: 4, borderTopWidth: 1, borderColor: colors.border },
-  inputRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, paddingHorizontal: spacing.sm, paddingVertical: 6 },
+  quick: { maxHeight: 40, paddingVertical: 6 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.panel, paddingHorizontal: spacing.sm, paddingVertical: 4 },
   prompt: { fontFamily: mono, color: colors.accent, fontSize: 12 },
-  input: { flex: 1, color: colors.text, fontFamily: mono, fontSize: 14, paddingVertical: 6, paddingHorizontal: 6 },
-  enter: { color: colors.accent, fontSize: 20, paddingHorizontal: 8 },
+  input: { flex: 1, color: colors.text, fontFamily: mono, fontSize: 13.5, paddingVertical: 6, paddingHorizontal: 6 },
+  enter: { color: colors.accent, fontSize: 18, paddingHorizontal: 8 },
 });
