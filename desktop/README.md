@@ -31,9 +31,12 @@ npm run pack             # 現在の OS 向けに展開ビルドのみ（動作�
 
 | ファイル | 内容 |
 | :--- | :--- |
-| `QubitOS-<version>-windows-x64-setup.exe` | インストーラ。インストール先を選べ、スタートメニューとデスクトップにショートカットを作ります |
-| `QubitOS-<version>-windows-arm64-setup.exe` | Arm 版 Windows 向けインストーラ |
+| `QubitOS-<version>-windows-setup.exe` | x64 と arm64 を両方含むインストーラ。どの Windows でも使えます |
+| `QubitOS-<version>-windows-x64-setup.exe` | x64 専用インストーラ（小さい） |
+| `QubitOS-<version>-windows-arm64-setup.exe` | Arm 版 Windows 専用インストーラ |
 | `QubitOS-<version>-windows-x64-portable.exe` | インストールせずにそのまま起動する版 |
+
+インストーラはインストール先を選べ、スタートメニューとデスクトップにショートカットを作ります。
 
 GitHub Actions の **Windows App (QubitOS)** ワークフローが同じ手順を `windows-latest` で実行します。
 `desktop/` を変更した push とプルリクエストで走り、インストーラはアーティファクトとして残ります。

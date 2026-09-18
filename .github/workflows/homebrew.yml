@@ -28,16 +28,23 @@ jobs:
       - uses: actions/checkout@v4
 
       # A formula only gets Homebrew's formula rules (rather than generic Ruby ones) inside a tap,
-      # and the published formula builds from main — so copy it into a throwaway tap and point it
-      # at this checkout, and the same run that proposes a change is the one that installs it.
+      # and the published formula builds from main — so copy it into a throwaway tap and point it at
+      # the branch under test, so the run that proposes a change is the one that installs it.
+      # A pull request from a fork has no branch here, and is tested against main as published.
       - name: Build a throwaway tap from the formula
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           set -eux
           brew tap-new local/qubitos
           tap="$(brew --repository local/qubitos)"
           rm -f "$tap"/Formula/*.rb
-          sed -E "s#head \"https://github.com/[^\"]+\", branch: \"main\"#head \"file://$GITHUB_WORKSPACE\", branch: \"$GITHUB_REF_NAME\"#" \
-            HomebrewFormula/qubit-computer.rb > "$tap/Formula/qubit-computer.rb"
+          if git ls-remote --exit-code --heads "https://github.com/$GITHUB_REPOSITORY.git" "$BRANCH"; then
+            sed -E "s#(head \"https://github.com/[^\"]+\", branch: )\"main\"#\1\"$BRANCH\"#" \
+              HomebrewFormula/qubit-computer.rb > "$tap/Formula/qubit-computer.rb"
+          else
+            cp HomebrewFormula/qubit-computer.rb "$tap/Formula/qubit-computer.rb"
+          fi
           grep head "$tap/Formula/qubit-computer.rb"
 
       - name: Lint the formula
