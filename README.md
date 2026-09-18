@@ -43,6 +43,7 @@ r² + η² = 1                                                 (Eq. 9)
 | `qubit_computer/algorithms.py` | Bell/GHZ（APQB 版含む）、テレポーテーション、Deutsch–Jozsa、Grover、QFT、相関レジスタ |
 | `qubit_computer/qbnn.py` | QBNN 層（K 次ゲート）、φ_S / Φ_S、η → 制御信号、XOR / parity 学習 |
 | `qubit_computer/os/` | QubitOS：`kernel.py`, `fs.py`, `programs.py`, `shell.py`, `boot.py` |
+| `app/` | React Native（Expo）アプリ版。コアと OS を TypeScript に移植 |
 
 ---
 
@@ -210,6 +211,21 @@ Shell(kernel).execute_line("run teleport 0.7 --shots 1; ps")
 | テレポーテーションで θ が保存 | — | 送信 APQB の θ を q2 で読み出し |
 
 `ent` コマンドは、状態が Bell 型 / GHZ 型の族に入っているかどうかも表示します（一般の状態では Eq. 14 / 17 は成立しません。論文 Sec. 3.1–3.2 の限定を反映）。
+
+---
+
+## React Native アプリ（app/）
+
+同じ量子コンピュータと QubitOS を TypeScript に移植した **Expo / React Native アプリ**を `app/` に同梱しています。ターミナル（qsh）、プログラム実行、量子ビットメモリ操作、APQB の Bloch 大円可視化、プロセス表 / スケジューラ / QBNN 学習の 5 画面で、仮想ファイルシステムは AsyncStorage に永続化されます。
+
+```bash
+cd app && npm install
+npx expo start          # Expo Go / 開発ビルド
+npx expo start --web    # ブラウザ
+npm test && npm run typecheck
+```
+
+詳細は [app/README.md](app/README.md) を参照してください。
 
 ---
 

@@ -1,0 +1,393 @@
+/**
+ * QubitOS kernel: hardware abstraction, qubit memory segments, processes,
+ * the APQB scheduler (exploration rate eps = p_min + (p_max - p_min) * eta of
+ * the system APQB), syscalls, filesystem and dmesg.
+ */
+import { APQB, thetaFromR } from '../core/apqb';
+import { Circuit } from '../core/circuit';
+import { QubitComputer, Result } from '../core/computer';
+import * as G from '../core/gates';
+import { Rng } from '../core/rng';
+import { APQBReadout, StateVector, concurrence, threeTangle } from '../core/state';
+import { FSDir, FSError, QubitFS } from './fs';
+import { PROGRAMS, Program, programKind } from './programs';
+
+export const OS_NAME = 'QubitOS';
+export const OS_VERSION = '0.1.0';
+
+export class KernelError extends Error {}
+
+export type ProcState = 'new' | 'ready' | 'running' | 'done' | 'failed' | 'killed';
+
+export interface Segment {
+  sid: number;
+  name: string;
+  qubits: number[];
+  state: StateVector;
+  owner: number | null;
+  created: number;
+  history: string[];
+}
+
+export class Process {
+  pid: number;
+  name: string;
+  argv: string[];
+  program: Program;
+  priority: number;
+  state: ProcState = 'new';
+  created = Date.now();
+  started: number | null = null;
+  finished: number | null = null;
+  result: unknown = null;
+  error: string | null = null;
+  logs: string[] = [];
+  shots: number;
+  seed?: number;
+  circuit: Circuit | null = null;
+
+  constructor(pid: number, name: string, argv: string[], program: Program, priority: number, shots: number, seed?: number) {
+    this.pid = pid;
+    this.name = name;
+    this.argv = argv;
+    this.program = program;
+    this.priority = priority;
+    this.shots = shots;
+    this.seed = seed;
+  }
+
+  log(line: string): void {
+    this.logs.push(line);
+  }
+
+  get elapsedMs(): number | null {
+    return this.started === null ? null : (this.finished ?? Date.now()) - this.started;
+  }
+
+  row(): string {
+    const el = this.elapsedMs !== null ? `${(this.elapsedMs / 1000).toFixed(3)}s` : '-';
+    return `${String(this.pid).padStart(4)}  ${this.state.padEnd(8)} ${String(this.priority).padStart(3)}  ${el.padStart(8)}  ${this.name} ${this.argv.join(' ')}`;
+  }
+}
+
+export const isResult = (v: unknown): v is Result => !!v && typeof v === 'object' && 'counts' in (v as object) && 'apqb' in (v as object);
+
+export interface KernelOptions {
+  numQubits?: number;
+  seed?: number;
+  theta?: number;
+  fsSnapshot?: FSDir;
+}
+
+export type SysctlValue = number | string | boolean;
+
+export class Kernel {
+  readonly bootTime = Date.now();
+  hw: QubitComputer;
+  numQubits: number;
+  fs: QubitFS;
+  rng: Rng;
+  seed?: number;
+  private dmesgBuf: string[] = [];
+  sysctl: Record<string, SysctlValue>;
+  freeQubits: number[];
+  segments = new Map<number, Segment>();
+  processes = new Map<number, Process>();
+  private nextSid = 1;
+  private nextPid = 1;
+  lastResult: Result | null = null;
+  programs: Record<string, Program> = { ...PROGRAMS };
+  /** Observers notified after any state change (used by the UI). */
+  listeners = new Set<() => void>();
+
+  constructor(opts: KernelOptions = {}) {
+    const numQubits = opts.numQubits ?? 16;
+    const theta = opts.theta ?? 0.2;
+    this.hw = new QubitComputer(numQubits);
+    this.numQubits = numQubits;
+    this.fs = new QubitFS(opts.fsSnapshot);
+    this.rng = new Rng(opts.seed);
+    this.seed = opts.seed;
+    this.sysctl = { 'apqb.theta': theta, 'sched.p_min': 0, 'sched.p_max': 0.5, 'hw.num_qubits': numQubits, 'run.shots': 1024 };
+    this.freeQubits = [...Array(numQubits).keys()];
+    this.log(`${OS_NAME} ${OS_VERSION} booting on APQB hardware: ${numQubits} physical qubits`);
+    this.log(`system APQB theta=${theta.toFixed(3)} -> r=${Math.cos(2 * theta) >= 0 ? '+' : ''}${Math.cos(2 * theta).toFixed(3)} eta=${Math.abs(Math.sin(2 * theta)).toFixed(3)} (scheduler exploration eps=${this.explorationRate().toFixed(3)})`);
+    this.log(`fs: ${opts.fsSnapshot ? 'restored snapshot' : 'fresh'}; ${Object.keys(this.programs).length} programs in /bin`);
+    this.refreshBin();
+  }
+
+  // ------------------------------------------------------------ events
+  notify(): void {
+    for (const l of this.listeners) l();
+  }
+
+  subscribe(fn: () => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  // ------------------------------------------------------------ logging
+  log(line: string): void {
+    const t = (Date.now() - this.bootTime) / 1000;
+    this.dmesgBuf.push(`[${t.toFixed(3).padStart(9)}] ${line}`);
+  }
+
+  sysDmesg(n = 50): string[] {
+    return this.dmesgBuf.slice(-n);
+  }
+
+  sysUname() {
+    return { os: OS_NAME, version: OS_VERSION, hardware: 'APQB state-vector', numQubits: this.numQubits, uptimeMs: Date.now() - this.bootTime, programs: Object.keys(this.programs).sort() };
+  }
+
+  // ------------------------------------------------------- sysctl/APQB
+  systemAPQB(): APQB {
+    return new APQB(Number(this.sysctl['apqb.theta']));
+  }
+
+  /** eps = p_min + (p_max - p_min) * eta (paper Eq. 11 / 32). */
+  explorationRate(): number {
+    const eta = this.systemAPQB().T;
+    const lo = Number(this.sysctl['sched.p_min']);
+    const hi = Number(this.sysctl['sched.p_max']);
+    return lo + (hi - lo) * eta;
+  }
+
+  sysSysctl(key?: string, value?: string): SysctlValue | Record<string, SysctlValue> {
+    if (key === undefined) return { ...this.sysctl };
+    let k = key;
+    if (k === 'apqb.r' && value !== undefined) {
+      value = String(thetaFromR(parseFloat(value)));
+      k = 'apqb.theta';
+    }
+    if (!(k in this.sysctl)) throw new KernelError(`unknown sysctl key '${key}'`);
+    if (value === undefined) return this.sysctl[k];
+    const old = this.sysctl[k];
+    let nv: SysctlValue;
+    if (typeof old === 'boolean') nv = ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+    else if (typeof old === 'number') {
+      const t = value.trim();
+      nv = t.endsWith('pi') ? parseFloat(t.slice(0, -2) || '1') * Math.PI : parseFloat(t);
+      if (Number.isNaN(nv)) throw new KernelError(`not a number: ${value}`);
+    } else nv = value;
+    if (k === 'apqb.theta' && (Number(nv) < 0 || Number(nv) > Math.PI / 2)) throw new KernelError('apqb.theta must lie in [0, pi/2]');
+    this.sysctl[k] = nv;
+    this.log(`sysctl ${k}: ${old} -> ${nv}`);
+    this.notify();
+    return nv;
+  }
+
+  // ------------------------------------------------------------ memory
+  sysAlloc(size: number, name = '', apqbs?: APQB[], owner: number | null = null): Segment {
+    if (size < 1) throw new KernelError('segment size must be >= 1');
+    if (size > this.freeQubits.length) throw new KernelError(`out of qubits: requested ${size}, free ${this.freeQubits.length}`);
+    if (apqbs && apqbs.length !== size) throw new KernelError(`expected ${size} initial APQBs, got ${apqbs.length}`);
+    const qubits = this.freeQubits.splice(0, size);
+    const sid = this.nextSid++;
+    const seg: Segment = { sid, name: name || `seg${sid}`, qubits, state: apqbs ? StateVector.fromAPQBs(apqbs) : new StateVector(size), owner, created: Date.now(), history: [] };
+    this.segments.set(sid, seg);
+    this.log(`alloc sid=${sid} '${seg.name}' qubits=[${qubits}]`);
+    this.notify();
+    return seg;
+  }
+
+  sysFree(sid: number): void {
+    const seg = this.segment(sid);
+    this.freeQubits.push(...seg.qubits);
+    this.freeQubits.sort((a, b) => a - b);
+    this.segments.delete(seg.sid);
+    this.log(`free sid=${sid} '${seg.name}' -> ${this.freeQubits.length} free qubits`);
+    this.notify();
+  }
+
+  sysMem() {
+    const used = this.numQubits - this.freeQubits.length;
+    return { total: this.numQubits, used, free: this.freeQubits.length, segments: [...this.segments.values()].map((s) => ({ sid: s.sid, name: s.name, qubits: s.qubits, owner: s.owner, ops: s.history.length })) };
+  }
+
+  segment(sid: number): Segment {
+    const seg = this.segments.get(Number(sid));
+    if (!seg) throw new KernelError(`no such segment: ${sid}`);
+    return seg;
+  }
+
+  // ------------------------------------------------------- register ops
+  sysApply(sid: number, gate: string, targets: number[], params: number[] = []): Segment {
+    const seg = this.segment(sid);
+    const key = gate.toLowerCase();
+    if (!(key in G.GATE_ARITY)) throw new KernelError(`unknown gate '${gate}'`);
+    if (G.GATE_ARITY[key] !== targets.length) throw new KernelError(`gate '${gate}' needs ${G.GATE_ARITY[key]} target(s)`);
+    seg.state.apply(G.resolve(key, params), targets);
+    seg.history.push(`${key}${params.length ? `(${params.map((p) => +p.toFixed(3))})` : ''} [${targets}]`);
+    this.notify();
+    return seg;
+  }
+
+  sysMeasure(sid: number, qubits?: number[], shots = 1, collapse = true): { outcome?: string; counts?: Record<string, number>; qubits: number[]; shots: number; collapsed: boolean } {
+    const seg = this.segment(sid);
+    const qs = qubits && qubits.length ? qubits : [...Array(seg.state.n).keys()];
+    if (shots <= 1) {
+      const outcome = seg.state.measure(qs, this.rng, collapse);
+      seg.history.push(`measure [${qs}] -> ${outcome}`);
+      this.notify();
+      return { outcome, qubits: qs, shots: 1, collapsed: collapse };
+    }
+    return { counts: seg.state.sample(shots, qs, this.rng), qubits: qs, shots, collapsed: false };
+  }
+
+  sysReadout(sid: number): APQBReadout[] {
+    return this.segment(sid).state.apqbReadouts();
+  }
+
+  sysReset(sid: number, apqbs?: APQB[]): Segment {
+    const seg = this.segment(sid);
+    seg.state = apqbs ? StateVector.fromAPQBs(apqbs) : new StateVector(seg.qubits.length);
+    seg.history.push('reset');
+    this.notify();
+    return seg;
+  }
+
+  sysEntanglement(sid: number) {
+    return Kernel.entanglementOf(this.segment(sid).state);
+  }
+
+  static entanglementOf(sv: StateVector) {
+    const readouts = sv.apqbReadouts();
+    const info: { numQubits: number; vonNeumann: number[]; r: number[]; concurrence?: number; c2Check?: number; threeTangle?: number; tau3Check?: number } = {
+      numQubits: sv.n, vonNeumann: readouts.map((r) => r.vonNeumann), r: readouts.map((r) => r.r),
+    };
+    if (sv.n === 2) {
+      info.concurrence = concurrence(sv);
+      info.c2Check = info.concurrence ** 2 + readouts[0].r ** 2;
+    }
+    if (sv.n === 3) {
+      info.threeTangle = threeTangle(sv);
+      info.tau3Check = info.threeTangle + readouts[0].r ** 2;
+    }
+    return info;
+  }
+
+  // ---------------------------------------------------------- processes
+  sysSpawn(name: string, argv: string[] = [], priority = 5, shots?: number, seed?: number): Process {
+    const prog = this.programs[name];
+    if (!prog) throw new KernelError(`no such program: ${name} (see 'ls /bin')`);
+    const pid = this.nextPid++;
+    const proc = new Process(pid, name, [...argv], prog, priority, shots ?? Number(this.sysctl['run.shots']), seed);
+    proc.state = 'ready';
+    this.processes.set(pid, proc);
+    this.log(`spawn pid=${pid} ${name} ${argv.join(' ')} prio=${priority}`);
+    this.notify();
+    return proc;
+  }
+
+  sysKill(pid: number): Process {
+    const proc = this.process(pid);
+    if (proc.state === 'ready' || proc.state === 'new' || proc.state === 'running') {
+      proc.state = 'killed';
+      proc.finished = Date.now();
+      this.log(`kill pid=${pid}`);
+      this.notify();
+    }
+    return proc;
+  }
+
+  sysPs(): Process[] {
+    return [...this.processes.values()];
+  }
+
+  process(pid: number): Process {
+    const p = this.processes.get(Number(pid));
+    if (!p) throw new KernelError(`no such process: ${pid}`);
+    return p;
+  }
+
+  readyQueue(): Process[] {
+    return this.sysPs().filter((p) => p.state === 'ready');
+  }
+
+  /** APQB scheduler: explore with probability eps, else pick the highest priority. */
+  pickNext(): Process | null {
+    const ready = this.readyQueue();
+    if (!ready.length) return null;
+    const eps = this.explorationRate();
+    if (this.rng.random() < eps) {
+      const choice = this.rng.choice(ready);
+      this.log(`sched: explore -> pid=${choice.pid} (eps=${eps.toFixed(3)})`);
+      return choice;
+    }
+    ready.sort((a, b) => b.priority - a.priority || a.pid - b.pid);
+    return ready[0];
+  }
+
+  execute(proc: Process): Process {
+    proc.state = 'running';
+    proc.started = Date.now();
+    try {
+      if (proc.program.circuit) {
+        const circuit = proc.program.circuit(proc.argv);
+        proc.circuit = circuit;
+        if (circuit.numQubits > this.numQubits) throw new KernelError(`circuit needs ${circuit.numQubits} qubits, machine has ${this.numQubits}`);
+        const result = this.hw.run(circuit, proc.shots, proc.seed);
+        proc.result = result;
+        this.lastResult = result;
+        proc.log(`ran '${circuit.name}' (${circuit.numQubits} qubits, depth ${circuit.depth}) shots=${proc.shots} in ${result.elapsedMs} ms`);
+      } else if (proc.program.job) {
+        proc.result = proc.program.job(this, proc, proc.argv);
+      }
+      proc.state = 'done';
+    } catch (e) {
+      proc.state = 'failed';
+      proc.error = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    }
+    proc.finished = Date.now();
+    this.log(`pid=${proc.pid} ${proc.name} -> ${proc.state}${proc.error ? ` (${proc.error})` : ''}`);
+    this.saveResult(proc);
+    this.notify();
+    return proc;
+  }
+
+  sysSchedule(maxSteps?: number): Process[] {
+    const done: Process[] = [];
+    while (maxSteps === undefined || done.length < maxSteps) {
+      const p = this.pickNext();
+      if (!p) break;
+      done.push(this.execute(p));
+    }
+    return done;
+  }
+
+  sysRun(name: string, argv: string[] = [], shots?: number, seed?: number, priority = 5): Process {
+    return this.execute(this.sysSpawn(name, argv, priority, shots, seed));
+  }
+
+  sysExecCircuit(circuit: Circuit, shots?: number, seed?: number): Result {
+    const result = this.hw.run(circuit, shots ?? Number(this.sysctl['run.shots']), seed);
+    this.lastResult = result;
+    this.log(`exec circuit '${circuit.name}' (${circuit.numQubits} qubits) shots=${result.shots}`);
+    this.notify();
+    return result;
+  }
+
+  private saveResult(proc: Process): void {
+    const payload: Record<string, unknown> = { pid: proc.pid, program: proc.name, argv: proc.argv, state: proc.state, error: proc.error, logs: proc.logs };
+    if (isResult(proc.result)) {
+      const r = proc.result;
+      payload.result = { counts: r.counts, shots: r.shots, seed: r.seed, apqb: r.apqb, state: r.state.nonzero().map(([b, a]) => ({ basis: b, re: a.re, im: a.im })) };
+    } else if (proc.result !== null) payload.result = proc.result;
+    try {
+      this.fs.writeJSON(`/var/results/${proc.pid}_${proc.name}.json`, payload);
+    } catch (e) {
+      if (!(e instanceof FSError)) throw e;
+    }
+  }
+
+  private refreshBin(): void {
+    for (const p of Object.values(this.programs)) this.fs.write(`/bin/${p.name}`, `#!qubitos ${programKind(p)}\n# ${p.description}\n# usage: ${p.usage}\n`);
+  }
+
+  registerProgram(p: Program): void {
+    this.programs[p.name] = p;
+    this.refreshBin();
+    this.log(`registered program '${p.name}'`);
+  }
+}
