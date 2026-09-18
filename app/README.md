@@ -49,6 +49,23 @@ npm run typecheck       # tsc --noEmit
 npm run export:web      # 静的 Web ビルド（dist/）
 ```
 
+## Web 版のデプロイ
+
+`main` への push（`app/` 配下の変更）で `.github/workflows/deploy-web.yml` が自動的に
+`npm test` → `npm run typecheck` → `expo export --platform web` を実行し、GitHub Pages に
+デプロイします。GitHub Pages を「GitHub Actions」ソースで有効化しておいてください。
+
+リポジトリ名のサブパス（`https://<owner>.github.io/<repo>/`）で配信するため、CI では
+`EXPO_WEB_BASE_URL` 環境変数（`app.config.js` が `expo.experiments.baseUrl` に反映）を
+`/<repo名>` に設定してエクスポートします。ローカルの `expo start --web` /
+`npm run export:web` はこの変数を設定しないので、ルートパス（サブパスなし）のままです。
+
+サブパスへのデプロイを手元で確認する場合：
+
+```bash
+EXPO_WEB_BASE_URL=/Qubit-Computer npx expo export --platform web
+```
+
 ## デスクトップ
 
 起動するとブートスプラッシュのあと QubitOS のデスクトップが表示され、Terminal が開きます。ドックのアイコンでアプリを開き（長押しで閉じる）、ウィンドウはタイトルバーでドラッグ、信号灯で閉じる・しまう・最大化できます。狭い画面ではウィンドウは自動的に全画面になります。
