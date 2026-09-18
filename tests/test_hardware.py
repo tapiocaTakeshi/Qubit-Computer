@@ -97,7 +97,12 @@ class TestCircuitAndComputer(unittest.TestCase):
         c = Circuit(3, "t").apqb(0, 0.3).cx(0, 1).cry(1, 2, 0.5).measure()
         c2 = Circuit.from_json(c.to_json())
         self.assertEqual(c.to_dict(), c2.to_dict())
-        self.assertAlmostEqual(self.qc.statevector(c).fidelity(self.qc.statevector(c2)), 1.0)
+        # Both circuits include measurement. Compare the same random trajectory;
+        # independent draws can correctly collapse to orthogonal states.
+        for seed in (0, 1, 2):
+            original = self.qc.statevector(c, rng=random.Random(seed))
+            restored = self.qc.statevector(c2, rng=random.Random(seed))
+            self.assertAlmostEqual(original.fidelity(restored), 1.0)
 
     def test_initial_apqbs_serialized(self):
         c = Circuit(2).prepare_from_correlations([0.5, -0.5])
