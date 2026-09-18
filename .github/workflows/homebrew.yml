@@ -1,0 +1,53 @@
+name: Homebrew formula
+
+# Lints the tap formula and actually installs it on macOS, so `brew install` keeps working.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "HomebrewFormula/**"
+      - "qubit_computer/**"
+      - "pyproject.toml"
+      - ".github/workflows/homebrew.yml"
+  pull_request:
+    paths:
+      - "HomebrewFormula/**"
+      - "qubit_computer/**"
+      - "pyproject.toml"
+      - ".github/workflows/homebrew.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  formula:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint the formula
+        run: brew style HomebrewFormula/qubit-computer.rb
+
+      # The published formula builds from main; point a copy at this checkout instead, so a change
+      # to the package or the formula is tested by the same run that proposes it.
+      - name: Point the formula at this branch
+        run: |
+          set -eux
+          mkdir -p "$RUNNER_TEMP/formula"
+          sed -E "s#head \"https://github.com/[^\"]+\", branch: \"main\"#head \"file://$GITHUB_WORKSPACE\", branch: \"$GITHUB_REF_NAME\"#" \
+            HomebrewFormula/qubit-computer.rb > "$RUNNER_TEMP/formula/qubit-computer.rb"
+          grep head "$RUNNER_TEMP/formula/qubit-computer.rb"
+
+      - name: brew install --HEAD
+        run: brew install --HEAD --formula "$RUNNER_TEMP/formula/qubit-computer.rb"
+
+      - name: brew test
+        run: brew test qubit-computer
+
+      - name: Boot QubitOS from the installed binary
+        run: |
+          qubitos -c uname
+          qubitos -c "run bell_apqb 0.4 --shots 64 --seed 1"
+          qubitos -c "apqb 0.3"
