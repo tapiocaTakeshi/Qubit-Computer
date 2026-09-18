@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.hero.qubitos"
     },
     "android": {
+      "package": "com.hero.qubitos",
       "adaptiveIcon": {
         "backgroundColor": "#0b0f17",
         "foregroundImage": "./assets/android-icon-foreground.png",
