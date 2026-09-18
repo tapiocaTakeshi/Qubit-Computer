@@ -61,9 +61,9 @@ function WebFrame({ url, onTitle }: { url: string; onTitle: (t: string) => void 
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.panel },
-  bar: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 6, backgroundColor: colors.panel2, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  address: { flex: 1, backgroundColor: colors.panel, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.25)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5, fontFamily: mono, fontSize: 12, color: colors.text },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 7, backgroundColor: '#f9fafd', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  address: { flex: 1, backgroundColor: colors.fill, borderWidth: 1, borderColor: 'transparent', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, fontFamily: mono, fontSize: 12, color: colors.text, textAlign: 'center' },
   offline: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  status: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 3, borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.panel2 },
+  status: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 4, borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: '#f9fafd' },
   statusText: { fontFamily: sans, fontSize: 10, color: colors.dim, flexShrink: 1 },
 });

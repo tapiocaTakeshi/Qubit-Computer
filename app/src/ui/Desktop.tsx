@@ -1,9 +1,9 @@
 /**
- * The QubitOS desktop: menu bar, draggable windows and a dock.
- * Windows are kernel service processes managed by the OS WindowManager.
+ * The QubitOS desktop: frosted menu bar, draggable glass windows and a floating dock
+ * over a mesh-gradient wallpaper. Windows are kernel service processes managed by the OS WindowManager.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { APPS, AppId, BuiltinAppId, OSWindow, WindowManager, isBuiltinApp } from '../os/wm';
 import { BrowserApp } from './BrowserApp';
 import { ScriptApp } from './ScriptApp';
@@ -17,11 +17,11 @@ import { ProgramsScreen } from './ProgramsScreen';
 import { QBNNApp } from './QBNNApp';
 import { SettingsApp } from './SettingsApp';
 import { TerminalScreen } from './TerminalScreen';
-import { colors, mono, sans } from './theme';
+import { PressState, colors, glass, mono, radius, sans, shadow, web } from './theme';
 
-const MENU_H = 28;
-const DOCK_H = 66;
-const TITLE_H = 30;
+const MENU_H = 30;
+const DOCK_H = 78;
+const TITLE_H = 34;
 
 function useWindowManager(): WindowManager {
   const { kernel } = useKernel();
@@ -54,6 +54,15 @@ function AppContent({ win, wm }: { win: OSWindow; wm: WindowManager }) {
   }
 }
 
+/** macOS traffic light; shows its glyph on hover (web) or while focused. */
+function Light({ color, glyph, onPress }: { color: string; glyph: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={6} style={({ hovered }: PressState) => [styles.light, { backgroundColor: color }, hovered && { transform: [{ scale: 1.15 }] }]}>
+      {({ hovered }: PressState) => <Text style={[styles.lightGlyph, { opacity: hovered ? 1 : 0 }]}>{glyph}</Text>}
+    </Pressable>
+  );
+}
+
 function WindowFrame({ win, wm, focused, area }: { win: OSWindow; wm: WindowManager; focused: boolean; area: { w: number; h: number } }) {
   const pan = useRef(
     PanResponder.create({
@@ -69,23 +78,45 @@ function WindowFrame({ win, wm, focused, area }: { win: OSWindow; wm: WindowMana
     }),
   ).current;
   const last = useRef({ x: 0, y: 0 });
+  const appear = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(appear, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [appear]);
   if (win.minimized) return null;
   const frame = win.maximized ? { left: 0, top: 0, width: area.w, height: area.h } : { left: win.x, top: win.y, width: win.w, height: win.h };
+  const info = wm.appInfo(win.app);
+  const builtin = isBuiltinApp(win.app);
   return (
-    <View style={[styles.window, frame, { zIndex: win.z, elevation: win.z }, focused ? styles.windowFocused : styles.windowBlurred]} onTouchStart={() => { if (!focused) wm.focus(win.id); }}>
-      <View style={styles.titleBar} {...pan.panHandlers}>
+    <Animated.View
+      style={[
+        styles.window,
+        frame,
+        { zIndex: win.z, elevation: win.z, opacity: appear, transform: [{ scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] },
+        win.maximized && { borderRadius: 0 },
+        focused ? styles.windowFocused : styles.windowBlurred,
+      ]}
+      onTouchStart={() => { if (!focused) wm.focus(win.id); }}
+    >
+      <View style={[styles.titleBar, !focused && styles.titleBarBlurred]} {...pan.panHandlers}>
         <View style={styles.lights}>
-          <Pressable onPress={() => wm.close(win.id)} hitSlop={6}><View style={[styles.light, { backgroundColor: focused ? '#ff5f57' : '#ddd' }]} /></Pressable>
-          <Pressable onPress={() => wm.minimize(win.id)} hitSlop={6}><View style={[styles.light, { backgroundColor: focused ? '#febc2e' : '#ddd' }]} /></Pressable>
-          <Pressable onPress={() => wm.toggleMaximize(win.id)} hitSlop={6}><View style={[styles.light, { backgroundColor: focused ? '#28c840' : '#ddd' }]} /></Pressable>
+          <Light color={focused ? '#ff5f57' : '#d9dae3'} glyph="×" onPress={() => wm.close(win.id)} />
+          <Light color={focused ? '#febc2e' : '#d9dae3'} glyph="–" onPress={() => wm.minimize(win.id)} />
+          <Light color={focused ? '#28c840' : '#d9dae3'} glyph="+" onPress={() => wm.toggleMaximize(win.id)} />
         </View>
-        <Text style={[styles.windowTitle, !focused && { color: '#9a9a9a' }]} numberOfLines={1}>{win.title}</Text>
-        <Text style={styles.pidTag}>pid {win.pid}</Text>
+        <View style={styles.titleCenter}>
+          {info ? (
+            <View style={[styles.titleIcon, { backgroundColor: builtin ? DOCK_COLORS[win.app as BuiltinAppId] : '#fff' }, !focused && { opacity: 0.5 }]}>
+              <Text style={[styles.titleIconGlyph, win.app === 'terminal' && { fontFamily: mono }, !builtin && { fontSize: 9 }]}>{info.icon}</Text>
+            </View>
+          ) : null}
+          <Text style={[styles.windowTitle, !focused && { color: colors.faint }]} numberOfLines={1}>{win.title}</Text>
+        </View>
+        <Text style={styles.pidTag}>{`pid ${win.pid}`}</Text>
       </View>
       <View style={styles.content}>
         <AppContent win={win} wm={wm} />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -98,22 +129,76 @@ function Clock({ compact }: { compact?: boolean }) {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const hh = String(now.getHours()).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
-  return <Text style={styles.menuText}>{compact ? `${hh}:${mm}` : `${days[now.getDay()]} ${now.getDate()}  ${hh}:${mm}`}</Text>;
+  return <Text style={[styles.menuText, { fontVariant: ['tabular-nums'] }]}>{compact ? `${hh}:${mm}` : `${days[now.getDay()]} ${now.getDate()}  ${hh}:${mm}`}</Text>;
+}
+
+function MenuItem({ title, onPress, bold }: { title: string; onPress: () => void; bold?: boolean }) {
+  return (
+    <Pressable onPress={onPress} style={({ hovered, pressed }: PressState) => [styles.menuItem, (hovered || pressed) && styles.menuItemHover]}>
+      <Text style={[styles.menuText, bold && styles.menuApp]} numberOfLines={1}>{title}</Text>
+    </Pressable>
+  );
+}
+
+function StatPill({ text, color, dot }: { text: string; color?: string; dot?: string }) {
+  return (
+    <View style={styles.statPill}>
+      {dot ? <View style={[styles.statDot, { backgroundColor: dot }]} /> : null}
+      <Text style={[styles.menuStat, color ? { color } : null]}>{text}</Text>
+    </View>
+  );
 }
 
 function BootSplash({ onDone }: { onDone: () => void }) {
   const [p, setP] = useState(0);
+  const fade = useRef(new Animated.Value(1)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const t = setInterval(() => setP((v) => Math.min(100, v + 9)), 60);
-    const done = setTimeout(onDone, 900);
+    Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+      Animated.timing(pulse, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+    ])).start();
+    const t = setInterval(() => setP((v) => Math.min(100, v + 7)), 60);
+    const done = setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 320, useNativeDriver: false }).start(onDone), 1100);
     return () => { clearInterval(t); clearTimeout(done); };
-  }, [onDone]);
+  }, [onDone, fade, pulse]);
   return (
-    <View style={styles.boot}>
-      <Text style={styles.bootLogo}>|ψ⟩</Text>
+    <Animated.View style={[styles.boot, { opacity: fade }]}>
+      <View pointerEvents="none" style={[styles.bootOrb, { backgroundColor: 'rgba(91,91,240,0.45)', top: '10%', left: '15%' }]} />
+      <View pointerEvents="none" style={[styles.bootOrb, { backgroundColor: 'rgba(168,85,247,0.35)', bottom: '5%', right: '10%' }]} />
+      <Animated.View style={[styles.bootLogoWrap, { transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) }] }]}>
+        <Text style={styles.bootLogo}>|ψ⟩</Text>
+      </Animated.View>
       <Text style={styles.bootTitle}>QubitOS</Text>
-      <View style={styles.bootTrack}><View style={[styles.bootFill, { width: `${p}%` }]} /></View>
-    </View>
+      <Text style={styles.bootSub}>APQB · adjustable pseudo quantum bits</Text>
+      <View style={styles.bootTrack}>
+        <View style={[styles.bootFill, { width: `${p}%` }]}>
+          <View style={styles.bootFillTip} />
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
+function DockIcon({ id, icon, title, open, onPress, onLongPress }: { id: string; icon: string; title: string; open: boolean; onPress: () => void; onLongPress: () => void }) {
+  const builtin = isBuiltinApp(id);
+  return (
+    <Pressable onPress={onPress} onLongPress={onLongPress} style={styles.dockItem}>
+      {({ hovered, pressed }: PressState) => (
+        <>
+          {hovered ? (
+            <View style={styles.tooltip}>
+              <Text style={styles.tooltipText}>{title}</Text>
+            </View>
+          ) : null}
+          <View style={[styles.dockIcon, { backgroundColor: builtin ? DOCK_COLORS[id as BuiltinAppId] : '#ffffff' }, !builtin && styles.dockIconApp, shadow.md, (hovered || pressed) && { transform: [{ translateY: -6 }, { scale: 1.12 }] }]}>
+            <View pointerEvents="none" style={styles.dockSheen} />
+            <Text style={[styles.dockGlyph, id === 'terminal' && { fontFamily: mono }, !builtin && { fontSize: 22 }]}>{icon}</Text>
+          </View>
+          <View style={[styles.dockDot, { opacity: open ? 1 : 0 }]} />
+        </>
+      )}
+    </Pressable>
   );
 }
 
@@ -132,28 +217,38 @@ export function Desktop() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booted, area.w > 0]);
 
-  const wallpaperStops = ['#dfe7f3', '#e9eef6', '#f1f3f8', '#e4ebf5'];
   return (
     <View style={styles.root}>
-      <View style={styles.menuBar}>
-        <Text style={[styles.menuText, styles.menuLogo]}>|ψ⟩</Text>
-        <Text style={[styles.menuText, styles.menuApp]} numberOfLines={1}>{activeTitle}</Text>
+      {/* Mesh wallpaper: a vertical gradient (CSS on the web, interpolated bands natively) plus blurred colour orbs. */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.wallpaper]}>
+        {Platform.OS !== 'web' ? WALLPAPER_BANDS.map((c, i) => (
+          <View key={i} style={[styles.wallpaperBand, { top: `${(100 * i) / WALLPAPER_BANDS.length}%`, backgroundColor: c }]} />
+        )) : null}
+        {ORBS.map((o, i) => (
+          <View key={i} style={[styles.orb, o]} />
+        ))}
+      </View>
+
+      <View style={[styles.menuBar, glass(0.62, 30)]}>
+        <View style={styles.menuLogo}><Text style={styles.menuLogoText}>|ψ⟩</Text></View>
+        <MenuItem title={activeTitle} bold onPress={() => { if (focused) wm.focus(focused.id); }} />
         {!narrow ? (
           <>
-            <Pressable onPress={() => wm.open('finder')}><Text style={styles.menuText}>File</Text></Pressable>
-            <Pressable onPress={() => { if (focused) wm.close(focused.id); }}><Text style={styles.menuText}>Close</Text></Pressable>
-            <Pressable onPress={() => wm.open('terminal', undefined, true)}><Text style={styles.menuText}>New Terminal</Text></Pressable>
-            <Pressable onPress={() => wm.open('store')}><Text style={styles.menuText}>App Store</Text></Pressable>
+            <MenuItem title="File" onPress={() => wm.open('finder')} />
+            <MenuItem title="Close" onPress={() => { if (focused) wm.close(focused.id); }} />
+            <MenuItem title="New Terminal" onPress={() => wm.open('terminal', undefined, true)} />
+            <MenuItem title="App Store" onPress={() => wm.open('store')} />
           </>
         ) : (
-          <Pressable onPress={() => { if (focused) wm.close(focused.id); }}><Text style={styles.menuText}>Close</Text></Pressable>
+          <MenuItem title="Close" onPress={() => { if (focused) wm.close(focused.id); }} />
         )}
         <View style={{ flex: 1 }} />
-        {!narrow ? <Text style={styles.menuStat}>{`${mem.free}/${mem.total} q free`}</Text> : null}
-        <Text style={styles.menuStat}>{`η ${kernel.systemAPQB().T.toFixed(2)}`}</Text>
-        <Text style={[styles.menuStat, { color: kernel.net.enabled ? colors.ok : colors.dim }]}>{kernel.net.enabled ? '⌾ online' : '⌾ offline'}</Text>
+        {!narrow ? <StatPill text={`${mem.free}/${mem.total} q`} /> : null}
+        <StatPill text={`η ${kernel.systemAPQB().T.toFixed(2)}`} color={colors.accent} />
+        <StatPill text={kernel.net.enabled ? 'online' : 'offline'} dot={kernel.net.enabled ? colors.ok : colors.faint} />
         <Clock compact={narrow} />
       </View>
+
       <View
         style={styles.desktop}
         onLayout={(e) => {
@@ -162,71 +257,96 @@ export function Desktop() {
           wm.setArea(width, height);
         }}
       >
-        {wallpaperStops.map((c, i) => (
-          <View key={i} pointerEvents="none" style={[styles.wallpaperBand, { top: `${i * 25}%`, backgroundColor: c }]} />
-        ))}
-        <View pointerEvents="none" style={styles.wallpaperOrb} />
-        <View pointerEvents="none" style={styles.wallpaperOrb2} />
         {area.w > 0 ? [...wm.windows].sort((a, b) => a.z - b.z).map((win) => (
           <WindowFrame key={win.id} win={win} wm={wm} focused={focused?.id === win.id} area={area} />
         )) : null}
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dock} contentContainerStyle={styles.dockContent}>
-        {wm.dockApps().map((info) => {
-          const id = info.id;
-          const open = wm.byApp(id);
-          const builtin = isBuiltinApp(id);
-          return (
-            <Pressable key={id} onPress={() => wm.open(id)} onLongPress={() => wm.closeApp(id)} style={({ pressed }) => [styles.dockItem, pressed && { transform: [{ scale: 1.12 }] }]}>
-              <View style={[styles.dockIcon, { backgroundColor: builtin ? DOCK_COLORS[id as BuiltinAppId] : '#ffffff' }, !builtin && styles.dockIconApp]}>
-                <Text style={[styles.dockGlyph, id === 'terminal' && { fontFamily: mono }, !builtin && { fontSize: 20 }]}>{info.icon}</Text>
-              </View>
-              <Text style={styles.dockLabel} numberOfLines={1}>{info.title}</Text>
-              <View style={[styles.dockDot, { opacity: open.length ? 1 : 0 }]} />
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+
+      <View style={styles.dockArea} pointerEvents="box-none">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.dock, glass(0.55, 30), shadow.lg]} contentContainerStyle={styles.dockContent}>
+          {wm.dockApps().map((info, i) => (
+            <React.Fragment key={info.id}>
+              {i === Object.keys(APPS).length ? <View style={styles.dockSep} /> : null}
+              <DockIcon id={info.id} icon={info.icon} title={info.title} open={wm.byApp(info.id).length > 0} onPress={() => wm.open(info.id)} onLongPress={() => wm.closeApp(info.id)} />
+            </React.Fragment>
+          ))}
+        </ScrollView>
+      </View>
       {!booted ? <BootSplash onDone={() => setBooted(true)} /> : null}
     </View>
   );
 }
 
 const DOCK_COLORS: Record<BuiltinAppId, string> = {
-  terminal: '#2c2c2e', finder: '#3d8bff', programs: '#34c759', memory: '#5856d6', apqb: '#ff9500', qbnn: '#af52de', activity: '#1c1c1e', settings: '#8e8e93', store: '#0a84ff', browser: '#32ade6',
+  terminal: '#1c1e33', finder: '#3b82f6', programs: '#22c55e', memory: '#6366f1', apqb: '#f97316', qbnn: '#a855f7', activity: '#0ea5e9', settings: '#64748b', store: '#2563eb', browser: '#14b8a6',
 };
 
+const WALLPAPER_STOPS: Array<[number, number, number]> = [[223, 227, 251], [232, 232, 252], [238, 240, 251], [235, 243, 251], [227, 238, 251]];
+/** 24 bands interpolated between the stops, for platforms without CSS gradients. */
+const WALLPAPER_BANDS = [...Array(24).keys()].map((i) => {
+  const t = (i / 23) * (WALLPAPER_STOPS.length - 1);
+  const a = WALLPAPER_STOPS[Math.floor(t)];
+  const b = WALLPAPER_STOPS[Math.min(WALLPAPER_STOPS.length - 1, Math.floor(t) + 1)];
+  const f = t - Math.floor(t);
+  return `rgb(${a.map((v, k) => Math.round(v + (b[k] - v) * f)).join(',')})`;
+});
+const WALLPAPER_GRADIENT = `linear-gradient(180deg, ${WALLPAPER_STOPS.map((c, i) => `rgb(${c.join(',')}) ${(100 * i) / (WALLPAPER_STOPS.length - 1)}%`).join(', ')})`;
+const ORBS = [
+  { width: 560, height: 560, borderRadius: 280, backgroundColor: 'rgba(120,120,255,0.42)', right: -160, top: -180 },
+  { width: 420, height: 420, borderRadius: 210, backgroundColor: 'rgba(168,85,247,0.30)', left: '30%', top: '35%' },
+  { width: 480, height: 480, borderRadius: 240, backgroundColor: 'rgba(20,184,166,0.28)', left: -160, bottom: -140 },
+  { width: 320, height: 320, borderRadius: 160, backgroundColor: 'rgba(255,255,255,0.7)', right: '20%', bottom: '10%' },
+] as const;
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#e6ecf5' },
-  menuBar: { height: MENU_H, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 14, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.75)', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.12)' },
-  menuText: { fontFamily: sans, fontSize: 13, color: colors.text },
-  menuLogo: { fontSize: 15, fontWeight: '700' },
+  root: { flex: 1, backgroundColor: '#e7e9fb' },
+  wallpaper: { ...web({ backgroundImage: WALLPAPER_GRADIENT }) },
+  wallpaperBand: { position: 'absolute', left: 0, right: 0, height: '5%' },
+  orb: { position: 'absolute', ...web({ filter: 'blur(70px)' }) },
+  menuBar: { height: MENU_H, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, gap: 2, overflow: 'hidden', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(20,24,48,0.10)', zIndex: 10 },
+  menuLogo: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: colors.accent, marginRight: 6, ...shadow.glow },
+  menuLogoText: { fontFamily: sans, fontSize: 13, fontWeight: '700', color: '#fff', letterSpacing: -0.3 },
+  menuItem: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, ...web({ cursor: 'default' }) },
+  menuItemHover: { backgroundColor: 'rgba(20,24,48,0.08)' },
+  menuText: { fontFamily: sans, fontSize: 13, color: colors.text, letterSpacing: -0.1 },
   menuApp: { fontWeight: '700', flexShrink: 1 },
-  menuStat: { fontFamily: mono, fontSize: 11, color: colors.dim },
+  menuStat: { fontFamily: mono, fontSize: 10.5, color: colors.dim, fontVariant: ['tabular-nums'] },
+  statPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: 'rgba(20,24,48,0.06)', marginHorizontal: 3 },
+  statDot: { width: 6, height: 6, borderRadius: 3 },
   desktop: { flex: 1, overflow: 'hidden' },
-  wallpaperBand: { position: 'absolute', left: 0, right: 0, height: '26%' },
-  wallpaperOrb: { position: 'absolute', width: 420, height: 420, borderRadius: 210, backgroundColor: 'rgba(120,160,255,0.18)', right: -120, top: -80 },
-  wallpaperOrb2: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(90,220,200,0.16)', left: -100, bottom: -60 },
-  window: { position: 'absolute', backgroundColor: colors.panel, borderRadius: 11, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.25)' },
-  windowFocused: { shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 22, shadowOffset: { width: 0, height: 10 } },
-  windowBlurred: { shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
-  titleBar: { height: TITLE_H, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, backgroundColor: '#ececec', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.15)' },
-  lights: { flexDirection: 'row', gap: 8, width: 60 },
-  light: { width: 12, height: 12, borderRadius: 6 },
-  windowTitle: { flex: 1, textAlign: 'center', fontFamily: sans, color: '#4d4d4d', fontSize: 13, fontWeight: '600' },
-  pidTag: { width: 60, textAlign: 'right', fontFamily: mono, fontSize: 10, color: '#9a9a9a' },
+  window: { position: 'absolute', backgroundColor: colors.panel, borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)', ...web({ outlineStyle: 'solid', outlineWidth: 1, outlineColor: 'rgba(20,24,48,0.18)' }) },
+  windowFocused: { ...shadow.lg },
+  windowBlurred: { ...shadow.md, opacity: 0.96 },
+  titleBar: { height: TITLE_H, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, backgroundColor: '#f6f7fb', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, ...web({ cursor: 'grab', userSelect: 'none' }) },
+  titleBarBlurred: { backgroundColor: '#fafafd' },
+  lights: { flexDirection: 'row', gap: 8, width: 64 },
+  light: { width: 12, height: 12, borderRadius: 6, alignItems: 'center', justifyContent: 'center', ...web({ transitionProperty: 'transform', transitionDuration: '120ms' }) },
+  lightGlyph: { fontSize: 9, lineHeight: 11, fontWeight: '800', color: 'rgba(0,0,0,0.55)', fontFamily: sans },
+  titleCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  titleIcon: { width: 16, height: 16, borderRadius: 4.5, alignItems: 'center', justifyContent: 'center' },
+  titleIconGlyph: { color: '#fff', fontSize: 8, fontWeight: '700', fontFamily: sans },
+  windowTitle: { fontFamily: sans, color: colors.text, fontSize: 13, fontWeight: '600', letterSpacing: -0.1, flexShrink: 1 },
+  pidTag: { width: 64, textAlign: 'right', fontFamily: mono, fontSize: 10, color: colors.faint },
   content: { flex: 1 },
-  dock: { height: DOCK_H, flexGrow: 0, backgroundColor: 'rgba(255,255,255,0.65)', borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.12)' },
-  dockContent: { flexGrow: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start', gap: 4, paddingTop: 6, paddingHorizontal: 8 },
-  dockItem: { alignItems: 'center', width: 50 },
-  dockIcon: { width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
-  dockIconApp: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.2)' },
-  dockGlyph: { color: '#fff', fontSize: 16, fontWeight: '700', fontFamily: sans },
-  dockLabel: { fontFamily: sans, fontSize: 9, color: colors.text, marginTop: 2 },
-  dockDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.text, marginTop: 1 },
-  boot: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', zIndex: 9999, elevation: 9999 },
-  bootLogo: { color: '#fff', fontSize: 56, fontFamily: sans, marginBottom: 6 },
-  bootTitle: { color: '#fff', fontSize: 16, fontFamily: sans, fontWeight: '600', marginBottom: 28 },
-  bootTrack: { width: 180, height: 5, borderRadius: 3, backgroundColor: '#333', overflow: 'hidden' },
-  bootFill: { height: '100%', backgroundColor: '#fff' },
+  dockArea: { height: DOCK_H, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 8 },
+  dock: { flexGrow: 0, maxWidth: '96%', borderRadius: radius.lg + 2, borderWidth: 1 },
+  dockContent: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, paddingVertical: 7, paddingHorizontal: 10 },
+  dockSep: { width: StyleSheet.hairlineWidth, height: 36, backgroundColor: 'rgba(20,24,48,0.18)', marginHorizontal: 4, alignSelf: 'center' },
+  dockItem: { alignItems: 'center', width: 52, ...web({ cursor: 'pointer' }) },
+  dockIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', ...web({ transitionProperty: 'transform', transitionDuration: '160ms', transitionTimingFunction: 'cubic-bezier(.2,.8,.2,1)' }) },
+  dockSheen: { position: 'absolute', left: 0, right: 0, top: 0, height: '48%', backgroundColor: 'rgba(255,255,255,0.22)' },
+  dockIconApp: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(20,24,48,0.2)' },
+  dockGlyph: { color: '#fff', fontSize: 19, fontWeight: '700', fontFamily: sans },
+  dockDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.text, marginTop: 4 },
+  tooltip: { position: 'absolute', top: -34, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 7, backgroundColor: 'rgba(21,23,43,0.92)', zIndex: 5, ...shadow.md },
+  tooltipText: { fontFamily: sans, fontSize: 11.5, color: '#fff', fontWeight: '500' },
+  boot: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', zIndex: 9999, elevation: 9999, overflow: 'hidden' },
+  bootOrb: { position: 'absolute', width: 480, height: 480, borderRadius: 240, ...web({ filter: 'blur(90px)' }) },
+  bootLogoWrap: { width: 96, height: 96, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center', marginBottom: 18, boxShadow: '0 0 60px rgba(120,120,255,0.45)' },
+  bootLogo: { color: '#fff', fontSize: 44, fontFamily: sans, fontWeight: '300', letterSpacing: -1 },
+  bootTitle: { color: '#fff', fontSize: 20, fontFamily: sans, fontWeight: '700', letterSpacing: -0.4, marginBottom: 4 },
+  bootSub: { color: colors.inkDim, fontSize: 11.5, fontFamily: sans, letterSpacing: 0.3, marginBottom: 32 },
+  bootTrack: { width: 200, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden' },
+  bootFill: { height: '100%', backgroundColor: colors.accent, borderRadius: 3, overflow: 'hidden' },
+  bootFillTip: { position: 'absolute', right: 0, top: 0, bottom: 0, width: '40%', backgroundColor: colors.accent2, ...web({ maskImage: 'linear-gradient(to right, transparent, black)', WebkitMaskImage: 'linear-gradient(to right, transparent, black)' }) },
 });

@@ -57,9 +57,9 @@ export function ScriptApp({ name }: { name: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.panel },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, backgroundColor: colors.panel2, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: '#f9fafd', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   icon: { fontSize: 28 },
-  title: { fontFamily: sans, fontSize: 15, fontWeight: '600', color: colors.text },
+  title: { fontFamily: sans, fontSize: 15, fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
   meta: { fontFamily: sans, fontSize: 11, fontWeight: '400', color: colors.dim },
   output: { flex: 1 },
 });

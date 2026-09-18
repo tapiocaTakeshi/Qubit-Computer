@@ -1,6 +1,6 @@
 # QubitOS for React Native
 
-**Qubit Computer / QubitOS の React Native（Expo）アプリ版。** APQB 量子コンピュータのシミュレータと OS カーネルを TypeScript に移植し、UI 自体を QubitOS の **デスクトップ環境**（メニューバー・ウィンドウ・ドック）として動かします。開いた各ウィンドウはカーネルのサービスプロセスで、シェルの `ps` / `kill` / `open` / `windows` / `close` から見えます。ネットワークスタックとパッケージマネージャ `qpm` を備え、インターネット上のレジストリ（この リポジトリの `registry/`）や任意の URL からアプリをインストールできます。ネイティブ依存は AsyncStorage（仮想ファイルシステムの永続化）と Slider だけです。見た目は macOS 風のシンプルなライトデザイン（システムフォント、白いパネル、ヘアライン境界、青いアクセント。ターミナルは macOS Terminal 風のウィンドウ）です。
+**Qubit Computer / QubitOS の React Native（Expo）アプリ版。** APQB 量子コンピュータのシミュレータと OS カーネルを TypeScript に移植し、UI 自体を QubitOS の **デスクトップ環境**（メニューバー・ウィンドウ・ドック）として動かします。開いた各ウィンドウはカーネルのサービスプロセスで、シェルの `ps` / `kill` / `open` / `windows` / `close` から見えます。ネットワークスタックとパッケージマネージャ `qpm` を備え、インターネット上のレジストリ（この リポジトリの `registry/`）や任意の URL からアプリをインストールできます。ネイティブ依存は AsyncStorage（仮想ファイルシステムの永続化）と Slider だけです。見た目は macOS Sonoma 風のフロステッドガラス・デザインです（メッシュグラデーションの壁紙、すりガラスのメニューバーとフローティング Dock、多層のソフトシャドウ、インディゴ／バイオレットのアクセント、Web では Inter / JetBrains Mono を読み込み。ターミナルはダークガラス調）。トークンは `src/ui/theme.ts` にまとめてあります。
 
 ```text
 app/
