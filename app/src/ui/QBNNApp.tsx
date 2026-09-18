@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import * as Q from '../core/qbnn';
 import { Body, Button, Card, Chip, Field, Label, Mono, Row } from './components';
 import { useKernel } from './KernelContext';
-import { colors, spacing } from './theme';
+import { colors, radius, spacing } from './theme';
 
 /** QBNN Lab: train the multiplicative APQB gating layer (paper Eq. 23-30). */
 export function QBNNApp() {
@@ -72,7 +72,7 @@ export function QBNNApp() {
           <Label>loss  epoch {history.length}  ·  {loss.toExponential(3)}  ·  acc {net ? Q.accuracy(net, data).toFixed(2) : '-'}</Label>
           <View style={styles.lossPlot}>
             {history.filter((_, i) => i % Math.max(1, Math.floor(history.length / 60)) === 0).map((l, i) => (
-              <View key={i} style={{ flex: 1, height: `${Math.max(2, 100 * Math.min(1, l / (history[0] || 1)))}%`, backgroundColor: colors.accent2, marginHorizontal: 0.5, borderRadius: 1 }} />
+              <View key={i} style={{ flex: 1, height: `${Math.max(3, 100 * Math.min(1, l / (history[0] || 1)))}%`, backgroundColor: colors.accent2, opacity: 0.55 + 0.45 * (i / 60), marginHorizontal: 0.5, borderTopLeftRadius: 2, borderTopRightRadius: 2 }} />
             ))}
           </View>
           {net ? (
@@ -95,5 +95,5 @@ export function QBNNApp() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  lossPlot: { height: 80, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: colors.panel2, borderRadius: 6, padding: 4 },
+  lossPlot: { height: 96, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: colors.panel2, borderRadius: radius.sm + 2, padding: 8, borderWidth: 1, borderColor: colors.border },
 });

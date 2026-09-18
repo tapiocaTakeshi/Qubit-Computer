@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { InstalledApp, RegistryEntry } from '../os/pkg';
 import { Body, Button, Card, Divider, Field, Mono, Row } from './components';
 import { useKernel } from './KernelContext';
-import { colors, sans, spacing } from './theme';
+import { colors, radius, sans, spacing } from './theme';
 
 /** App Store: install QubitOS packages and web apps from the internet. */
 export function StoreApp({ onOpen }: { onOpen: (app: string) => void }) {
@@ -45,7 +45,7 @@ export function StoreApp({ onOpen }: { onOpen: (app: string) => void }) {
     const kind = (p ?? app)!.kind;
     return (
       <View style={styles.entry}>
-        <Text style={styles.icon}>{(p ?? app)!.icon ?? (kind === 'web' ? '🌐' : '▶')}</Text>
+        <View style={styles.iconWrap}><Text style={styles.icon}>{(p ?? app)!.icon ?? (kind === 'web' ? '🌐' : '▶')}</Text></View>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{(p ?? app)!.title} <Text style={styles.meta}>{(p ?? app)!.version} · {kind}</Text></Text>
           <Body color={colors.dim} style={{ fontSize: 12 }}>{(p ?? app)!.description ?? ''}</Body>
@@ -101,8 +101,9 @@ export function StoreApp({ onOpen }: { onOpen: (app: string) => void }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  entry: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  icon: { fontSize: 24, width: 34, textAlign: 'center' },
-  title: { fontFamily: sans, fontSize: 14, fontWeight: '600', color: colors.text },
-  meta: { fontFamily: sans, fontSize: 11, fontWeight: '400', color: colors.dim },
+  entry: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  iconWrap: { width: 44, height: 44, borderRadius: radius.sm + 3, backgroundColor: colors.panel2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
+  icon: { fontSize: 22 },
+  title: { fontFamily: sans, fontSize: 14, fontWeight: '600', color: colors.text, letterSpacing: -0.1 },
+  meta: { fontFamily: sans, fontSize: 11, fontWeight: '400', color: colors.faint },
 });

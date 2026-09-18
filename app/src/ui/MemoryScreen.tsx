@@ -4,10 +4,10 @@ import { APQB } from '../core/apqb';
 import * as G from '../core/gates';
 import { Kernel, Segment } from '../os/kernel';
 import { num } from '../os/programs';
-import { Body, Button, Card, Chip, Field, Histogram, KV, Label, Mono, ReadoutTable, Row } from './components';
+import { Button, Card, Chip, Field, Histogram, Label, Mono, ReadoutTable, Row, Stat } from './components';
 import { useKernel } from './KernelContext';
 import { EntanglementView } from './ResultView';
-import { colors, spacing } from './theme';
+import { colors, radius, spacing } from './theme';
 
 const GATES = ['apqb', 'apqb_r', 'h', 'x', 'y', 'z', 's', 't', 'rx', 'ry', 'rz', 'p', 'cx', 'cz', 'cry', 'cp', 'swap', 'ccx'];
 
@@ -87,12 +87,14 @@ export function MemoryScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.md }} keyboardShouldPersistTaps="handled">
       <Card title="Qubit Memory">
-        <KV k="physical qubits" v={String(mem.total)} />
-        <KV k="allocated" v={String(mem.used)} color={colors.warn} />
-        <KV k="free" v={String(mem.free)} color={colors.ok} />
+        <Row>
+          <Stat label="physical" value={String(mem.total)} unit="qubits" />
+          <Stat label="allocated" value={String(mem.used)} color={colors.warn} />
+          <Stat label="free" value={String(mem.free)} color={colors.ok} />
+        </Row>
         <View style={styles.memBar}>
           {[...Array(mem.total).keys()].map((q) => (
-            <View key={q} style={[styles.memCell, { backgroundColor: kernel.freeQubits.includes(q) ? colors.panel2 : colors.accent }]} />
+            <View key={q} style={[styles.memCell, kernel.freeQubits.includes(q) ? styles.memFree : styles.memUsed]} />
           ))}
         </View>
       </Card>
@@ -122,6 +124,8 @@ export function MemoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  memBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginTop: spacing.sm },
-  memCell: { width: 16, height: 16, borderRadius: 3 },
+  memBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: spacing.md, padding: 8, backgroundColor: colors.panel2, borderRadius: radius.sm + 2 },
+  memCell: { width: 14, height: 14, borderRadius: 4 },
+  memFree: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.border },
+  memUsed: { backgroundColor: colors.accent, boxShadow: '0 1px 4px rgba(91,91,240,0.4)' },
 });

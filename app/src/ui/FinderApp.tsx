@@ -5,7 +5,7 @@ import { resultSummary } from '../core/computer';
 import { Shell } from '../os/shell';
 import { Body, Button, Field, Mono, Row } from './components';
 import { useKernel } from './KernelContext';
-import { colors, mono, radius, sans, spacing } from './theme';
+import { PressState, colors, mono, radius, sans, spacing, web } from './theme';
 
 /** Finder: browse QubitFS, preview files, run scripts and circuits. */
 export function FinderApp({ path: initial, onOpenPath }: { path?: string; onOpenPath?: (p: string) => void }) {
@@ -54,7 +54,10 @@ export function FinderApp({ path: initial, onOpenPath }: { path?: string; onOpen
           const p = i === 0 ? '/' : crumbs.slice(0, i + 1).join('/');
           return (
             <Pressable key={p} onPress={() => { setDir(p); setSelected(null); onOpenPath?.(p); }}>
-              <Text style={styles.crumb}>{i === 0 ? 'QubitFS' : c}{i < crumbs.length - 1 ? '  ›  ' : ''}</Text>
+              <View style={styles.crumbWrap}>
+                <Text style={[styles.crumb, i === crumbs.length - 1 && styles.crumbCurrent]}>{i === 0 ? 'QubitFS' : c}</Text>
+                {i < crumbs.length - 1 ? <Text style={styles.crumbSep}>›</Text> : null}
+              </View>
             </Pressable>
           );
         })}
@@ -67,7 +70,7 @@ export function FinderApp({ path: initial, onOpenPath }: { path?: string; onOpen
             const full = join(dir, isDir ? name.slice(0, -1) : name);
             const sel = selected === full;
             return (
-              <Pressable key={name} onPress={() => { if (isDir) { setDir(full); setSelected(null); onOpenPath?.(full); } else setSelected(full); }} style={[styles.item, sel && styles.itemSel]}>
+              <Pressable key={name} onPress={() => { if (isDir) { setDir(full); setSelected(null); onOpenPath?.(full); } else setSelected(full); }} style={({ hovered }: PressState) => [styles.item, hovered && !sel && styles.itemHover, sel && styles.itemSel]}>
                 <Text style={styles.itemIcon}>{isDir ? '📁' : name.endsWith('.qsh') ? '📜' : name.endsWith('.json') ? '🧾' : '📄'}</Text>
                 <Text style={[styles.itemText, sel && { color: '#fff' }]} numberOfLines={1}>{isDir ? name.slice(0, -1) : name}</Text>
               </Pressable>
@@ -99,7 +102,7 @@ export function FinderApp({ path: initial, onOpenPath }: { path?: string; onOpen
           {output.length ? (
             <ScrollView style={styles.console}>
               {output.map((l, i) => (
-                <Mono key={i} style={{ fontSize: 11 }} color={l.startsWith('qsh:') ? colors.danger : colors.text}>{l}</Mono>
+                <Mono key={i} style={{ fontSize: 11 }} color={l.startsWith('qsh:') ? '#fb7185' : colors.inkText}>{l}</Mono>
               ))}
             </ScrollView>
           ) : null}
@@ -111,16 +114,20 @@ export function FinderApp({ path: initial, onOpenPath }: { path?: string; onOpen
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.panel },
-  crumbBar: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.panel2 },
-  crumb: { fontFamily: sans, fontSize: 12.5, color: colors.text, fontWeight: '500' },
+  crumbBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 7, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: '#f9fafd' },
+  crumbWrap: { flexDirection: 'row', alignItems: 'center' },
+  crumb: { fontFamily: sans, fontSize: 12.5, color: colors.dim, fontWeight: '500', ...web({ cursor: 'pointer' }) },
+  crumbCurrent: { color: colors.text, fontWeight: '600' },
+  crumbSep: { fontFamily: sans, fontSize: 13, color: colors.faint, marginHorizontal: 7 },
   split: { flex: 1, flexDirection: 'row' },
-  list: { width: 170, borderRightWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, paddingHorizontal: 8, gap: 6 },
-  itemSel: { backgroundColor: colors.accent },
+  list: { width: 176, borderRightWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: '#f6f7fb', paddingVertical: 6, paddingHorizontal: 6 },
+  item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5.5, paddingHorizontal: 8, gap: 7, borderRadius: radius.sm, ...web({ cursor: 'pointer', transitionProperty: 'background-color', transitionDuration: '100ms' }) },
+  itemHover: { backgroundColor: 'rgba(20,24,48,0.05)' },
+  itemSel: { backgroundColor: colors.accent, boxShadow: '0 2px 8px rgba(91,91,240,0.3)' },
   itemIcon: { fontSize: 13 },
   itemText: { fontFamily: sans, fontSize: 12.5, color: colors.text, flex: 1 },
-  preview: { flex: 1, padding: 10 },
-  previewTitle: { fontFamily: mono, fontSize: 11, color: colors.dim, marginBottom: 6 },
-  previewBody: { flex: 1, backgroundColor: colors.panel2, borderRadius: radius.sm, padding: 6 },
-  console: { maxHeight: 180, marginTop: 8, backgroundColor: colors.panel2, borderRadius: radius.sm, padding: 6 },
+  preview: { flex: 1, padding: 12 },
+  previewTitle: { fontFamily: mono, fontSize: 11, color: colors.dim, marginBottom: 8 },
+  previewBody: { flex: 1, backgroundColor: colors.panel2, borderRadius: radius.sm + 2, padding: 10, borderWidth: 1, borderColor: colors.border },
+  console: { maxHeight: 180, marginTop: 8, backgroundColor: colors.ink, borderRadius: radius.sm + 2, padding: 10 },
 });
