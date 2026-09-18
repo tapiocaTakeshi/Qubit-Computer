@@ -27,24 +27,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Lint the formula
-        run: brew style HomebrewFormula/qubit-computer.rb
-
-      # The published formula builds from main; point a copy at this checkout instead, so a change
-      # to the package or the formula is tested by the same run that proposes it.
-      - name: Point the formula at this branch
+      # A formula only gets Homebrew's formula rules (rather than generic Ruby ones) inside a tap,
+      # and the published formula builds from main — so copy it into a throwaway tap and point it
+      # at this checkout, and the same run that proposes a change is the one that installs it.
+      - name: Build a throwaway tap from the formula
         run: |
           set -eux
-          mkdir -p "$RUNNER_TEMP/formula"
+          brew tap-new local/qubitos
+          tap="$(brew --repository local/qubitos)"
+          rm -f "$tap"/Formula/*.rb
           sed -E "s#head \"https://github.com/[^\"]+\", branch: \"main\"#head \"file://$GITHUB_WORKSPACE\", branch: \"$GITHUB_REF_NAME\"#" \
-            HomebrewFormula/qubit-computer.rb > "$RUNNER_TEMP/formula/qubit-computer.rb"
-          grep head "$RUNNER_TEMP/formula/qubit-computer.rb"
+            HomebrewFormula/qubit-computer.rb > "$tap/Formula/qubit-computer.rb"
+          grep head "$tap/Formula/qubit-computer.rb"
+
+      - name: Lint the formula
+        run: brew style local/qubitos
 
       - name: brew install --HEAD
-        run: brew install --HEAD --formula "$RUNNER_TEMP/formula/qubit-computer.rb"
+        run: brew install --HEAD local/qubitos/qubit-computer
 
       - name: brew test
-        run: brew test qubit-computer
+        run: brew test local/qubitos/qubit-computer
 
       - name: Boot QubitOS from the installed binary
         run: |
