@@ -19,6 +19,7 @@ app/
 │   ├── programs.ts          /bin のプログラム表（UI 用のパラメータ定義付き）
 │   ├── wm.ts                ウィンドウマネージャ（ウィンドウ = カーネルのサービスプロセス）
 │   ├── net.ts               ネットワークスタック（fetch ラッパー, 履歴, 再試行, sysctl net.*）
+│   ├── webinstall.ts        アプリ自体のインストール（beforeinstallprompt, 起動ショートカット）
 │   ├── pkg.ts               qpm パッケージマネージャ（レジストリ, インストール, /etc/apps.json）
 │   └── shell.ts             qsh シェル（open / windows / close / curl / wget / qpm を含む）
 ├── src/ui/                  デスクトップとアプリ
@@ -34,6 +35,11 @@ app/
 │   ├── QBNNApp.tsx          QBNN Lab（XOR / parity 学習, 損失グラフ）
 │   ├── ActivityApp.tsx      Activity Monitor（プロセス表, スケジューラ, dmesg）
 │   └── SettingsApp.tsx      System Settings（About, sysctl スライダー, ファイルシステム初期化）
+├── public/                  Web ビルドにそのままコピーされる静的ファイル
+│   ├── index.html           HTML テンプレート（manifest / Service Worker / install の捕捉）
+│   ├── manifest.webmanifest Web アプリマニフェスト（アイコン, standalone, ショートカット）
+│   ├── sw.js                Service Worker（オフライン起動のためのキャッシュ）
+│   └── icons/               インストール時のアイコン（192 / 512 / maskable / apple-touch）
 └── __tests__/               jest（コア + OS, node 環境で実行）
 ```
 
@@ -44,7 +50,7 @@ cd app
 npm install
 npx expo start          # Expo Go または開発ビルドで開く
 npx expo start --web    # ブラウザ
-npm test                # jest（コア・OS の 32 テスト）
+npm test                # jest（コア・OS・インストーラの 54 テスト）
 npm run typecheck       # tsc --noEmit
 npm run export:web      # 静的 Web ビルド（dist/）
 ```
@@ -65,6 +71,63 @@ npm run export:web      # 静的 Web ビルド（dist/）
 ```bash
 EXPO_WEB_BASE_URL=/Qubit-Computer npx expo export --platform web
 ```
+
+## Web アプリとしてインストールする（PWA）
+
+デプロイした Web 版は **インストール可能な Web アプリ**です。インストールするとブラウザの UI が消えて
+独立したウィンドウで起動し、Dock / スタートメニュー / ホーム画面にアイコンが並び、Service Worker が
+シェルをキャッシュするのでオフラインでも起動します。QubitFS は今までどおりこの端末に残ります。
+
+インストールの入口は 4 つあります。
+
+| 入口 | 場所 |
+| :--- | :--- |
+| メニューバーの **Install** ボタン | ブラウザがインストールを提案しているときだけ右上に出ます |
+| **System Settings → Install QubitOS** | About の下 |
+| **App Store → Install QubitOS** | 一番上のカード |
+| `install` コマンド | Terminal。`install --status` で状態だけ表示 |
+
+```text
+qubitos:/$ install --status
+install: available — run `install` or use System Settings
+supported=true promptable=true installed=false standalone=false offline=true browser=chromium
+qubitos:/$ install
+installing QubitOS — it will appear with your other apps
+```
+
+ブラウザが `beforeinstallprompt` を出さない場合（Safari / iOS / Firefox）は、カードとコマンドが
+その環境での手順（共有 → ホーム画面に追加、ファイル → Dock に追加 など）を案内します。
+`public/index.html` のブートスクリプトが React のマウント前に `beforeinstallprompt` を捕まえて
+`window.__qubitos` に預け、カーネルの `WebInstaller`（`src/os/webinstall.ts`）がそれを再生します。
+
+インストール済みのアイコンを右クリック（長押し）すると、マニフェストの **ショートカット**から
+Terminal / Finder / App Store / QBNN Lab を直接開けます。これは `?app=<id>` というクエリで、
+ブックマークからも使えます（例：`…/?app=qbnn`）。
+
+`public/` の中身はビルド時に `dist/` へそのままコピーされ、URL はすべて相対なので、
+ルート配信（`http://localhost:8081/`）でもサブパス配信（`https://…/Qubit-Computer/`）でも
+同じファイルで動きます。
+
+> ネイティブ（iOS / Android ビルド）や `desktop/` の Electron 版では、アプリは既にインストール済みなので
+> カードはその旨を表示するだけになります。
+
+---
+
+## デスクトップ版（Electron / Windows インストーラ）
+
+同じ Web ビルドを Electron で包んだデスクトップ版が [`desktop/`](../desktop/README.md) です。
+Windows 向けにはインストーラ（`QubitOS-<version>-windows-x64-setup.exe`）と portable 版を
+GitHub Actions がビルドします。
+
+```bash
+cd desktop
+npm install
+npm run prepare:app   # ../app の Web ビルド → desktop/web
+npm start             # Electron で起動
+npm run dist:win      # Windows インストーラ（Windows 上で実行）
+```
+
+---
 
 ## デスクトップ
 
@@ -98,6 +161,7 @@ qubitos:/$ run app:bell-lab           # 通常のプログラムとしても実�
 qubitos:/$ curl https://raw.githubusercontent.com/tapiocaTakeshi/Qubit-Computer/main/registry/index.json
 qubitos:/$ wget https://…/circuit.json /lib/circuits/mine.json
 qubitos:/$ qpm remove bell-lab
+qubitos:/$ install                    # QubitOS 自体をこの端末にインストール（Web 版）
 ```
 
 パッケージの形式は 2 種類です（[registry/README.md](../registry/README.md)）。

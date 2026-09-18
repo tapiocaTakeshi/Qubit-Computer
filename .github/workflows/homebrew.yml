@@ -1,0 +1,63 @@
+name: Homebrew formula
+
+# Lints the tap formula and actually installs it on macOS, so `brew install` keeps working.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "HomebrewFormula/**"
+      - "qubit_computer/**"
+      - "pyproject.toml"
+      - ".github/workflows/homebrew.yml"
+  pull_request:
+    paths:
+      - "HomebrewFormula/**"
+      - "qubit_computer/**"
+      - "pyproject.toml"
+      - ".github/workflows/homebrew.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  formula:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # A formula only gets Homebrew's formula rules (rather than generic Ruby ones) inside a tap,
+      # and the published formula builds from main — so copy it into a throwaway tap and point it at
+      # the branch under test, so the run that proposes a change is the one that installs it.
+      # A pull request from a fork has no branch here, and is tested against main as published.
+      - name: Build a throwaway tap from the formula
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -eux
+          brew tap-new local/qubitos
+          tap="$(brew --repository local/qubitos)"
+          rm -f "$tap"/Formula/*.rb
+          if git ls-remote --exit-code --heads "https://github.com/$GITHUB_REPOSITORY.git" "$BRANCH"; then
+            sed -E "s#(head \"https://github.com/[^\"]+\", branch: )\"main\"#\1\"$BRANCH\"#" \
+              HomebrewFormula/qubit-computer.rb > "$tap/Formula/qubit-computer.rb"
+          else
+            cp HomebrewFormula/qubit-computer.rb "$tap/Formula/qubit-computer.rb"
+          fi
+          grep head "$tap/Formula/qubit-computer.rb"
+
+      - name: Lint the formula
+        run: brew style local/qubitos
+
+      - name: brew install --HEAD
+        run: brew install --HEAD local/qubitos/qubit-computer
+
+      - name: brew test
+        run: brew test local/qubitos/qubit-computer
+
+      - name: Boot QubitOS from the installed binary
+        run: |
+          qubitos -c uname
+          qubitos -c "run bell_apqb 0.4 --shots 64 --seed 1"
+          qubitos -c "apqb 0.3"

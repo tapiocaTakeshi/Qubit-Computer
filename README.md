@@ -44,11 +44,36 @@ r² + η² = 1                                                 (Eq. 9)
 | `qubit_computer/algorithms.py` | Bell/GHZ（APQB 版含む）、テレポーテーション、Deutsch–Jozsa、Grover、QFT、相関レジスタ |
 | `qubit_computer/qbnn.py` | QBNN 層（K 次ゲート）、φ_S / Φ_S、η → 制御信号、XOR / parity 学習 |
 | `qubit_computer/os/` | QubitOS：`kernel.py`, `fs.py`, `programs.py`, `shell.py`, `boot.py` |
-| `app/` | React Native（Expo）アプリ版。コアと OS を TypeScript に移植 |
+| `app/` | React Native（Expo）アプリ版。コアと OS を TypeScript に移植。Web ビルドはインストール可能な PWA |
+| `desktop/` | Web ビルドを Electron で包んだデスクトップ版。Windows インストーラ（.exe）を生成 |
+| `HomebrewFormula/` | Homebrew formula（`brew install` で `qubitos` コマンドを導入） |
 
 ---
 
 ## インストールと起動
+
+インストール方法は 4 つあります。用途で選んでください。
+
+| 方法 | 対象 | コマンド / 入口 |
+| :--- | :--- | :--- |
+| **Homebrew** | macOS / Linux の CLI（`qubitos` シェル） | `brew tap` → `brew install --HEAD` |
+| **pip** | Python パッケージとして組み込む | `pip install -e .` |
+| **Web アプリ（PWA）** | ブラウザからそのままインストール | [GitHub Pages 版](https://tapiocatakeshi.github.io/Qubit-Computer/) の「Install」 |
+| **Windows アプリ** | インストーラ（.exe）でデスクトップアプリとして | [Releases](https://github.com/tapiocaTakeshi/Qubit-Computer/releases) の `QubitOS-*-setup.exe` |
+
+### Homebrew（qubitos コマンド）
+
+```bash
+brew tap tapiocatakeshi/qubit-computer https://github.com/tapiocaTakeshi/Qubit-Computer
+brew install --HEAD tapiocatakeshi/qubit-computer/qubit-computer
+qubitos
+```
+
+タグ付きリリースがまだ無いため formula は HEAD 専用です（`--HEAD` が必要）。formula 本体は
+[HomebrewFormula/qubit-computer.rb](HomebrewFormula/qubit-computer.rb) にあり、`brew upgrade --fetch-HEAD`
+で更新、`brew uninstall qubit-computer` で削除できます。
+
+### pip（ソースから）
 
 ```bash
 git clone https://github.com/tapiocaTakeshi/Qubit-Computer.git
@@ -63,6 +88,20 @@ python -m qubit_computer      # 同じ
 ```
 
 起動時のオプション：`-q/--qubits N`（物理量子ビット数、既定 16）、`--seed`、`--theta`（システム APQB の角度）、`--backend cpu|gpu|qnpu`（既定 `cpu`、詳細は後述）、`--quiet`。
+
+### Web アプリ（PWA）
+
+GitHub Pages 版はインストール可能な Web アプリです。ブラウザのアドレスバーのインストールアイコン、
+またはメニューバー右上の **Install** ボタン、System Settings / App Store の「Install QubitOS」、
+Terminal の `install` コマンドのいずれからでもインストールできます。インストールすると独立した
+ウィンドウで起動し、Service Worker がシェルをキャッシュするのでオフラインでも動きます。詳細は
+[app/README.md](app/README.md#web-アプリとしてインストールするpwa) を参照してください。
+
+### Windows アプリ
+
+同じ Web ビルドを Electron で包んだデスクトップ版です。インストーラ（`QubitOS-<version>-windows-setup.exe`）と
+インストール不要の portable 版を GitHub Actions がビルドし、リリースを publish するとそこに添付されます。
+手元でビルドする手順は [desktop/README.md](desktop/README.md) にあります。
 
 ---
 
@@ -261,9 +300,13 @@ cd app && npm install
 npx expo start          # Expo Go / 開発ビルド
 npx expo start --web    # ブラウザ
 npm test && npm run typecheck
+npm run export:web      # 静的 Web ビルド（dist/）＝ PWA / デスクトップ版の中身
 ```
 
-詳細は [app/README.md](app/README.md) を参照してください。
+Web ビルドはインストール可能な Web アプリ（PWA）で、そのまま Windows / macOS / Android / iOS の
+アプリとしてインストールできます。同じビルドを Electron で包んだデスクトップ版が `desktop/` です。
+
+詳細は [app/README.md](app/README.md) と [desktop/README.md](desktop/README.md) を参照してください。
 
 ---
 

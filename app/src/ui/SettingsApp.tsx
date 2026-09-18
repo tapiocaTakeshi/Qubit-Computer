@@ -3,6 +3,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { availableBackends } from '../core/backend';
 import { Body, Button, Card, Chip, Divider, Field, KV, Label, Row } from './components';
+import { InstallCard } from './InstallCard';
 import { useState } from 'react';
 import { useKernel } from './KernelContext';
 import { colors, spacing } from './theme';
@@ -26,6 +27,7 @@ export function SettingsApp() {
         <KV k="windows" v={String(kernel.wm?.windows.length ?? 0)} />
         <KV k="programs in /bin" v={String(u.programs.length)} />
       </Card>
+      <InstallCard />
       <Card title="Hardware Backend">
         <Body color={colors.dim} style={{ fontSize: 12 }}>Which device drives the APQB/QBNN Runtime. APQB is a quantum-inspired model that runs on ordinary classical hardware, so this picks the classical engine, not a physical qubit.</Body>
         <Row style={{ marginTop: spacing.sm }}>

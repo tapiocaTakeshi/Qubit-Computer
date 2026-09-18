@@ -1,0 +1,91 @@
+name: Windows App (QubitOS)
+
+# Builds the QubitOS desktop app: the same Expo web build, wrapped in Electron and packaged as a
+# Windows installer (.exe) plus a portable .exe. Every change to the desktop shell is built; the
+# installers are attached to a GitHub release when one is published.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/windows-app.yml"
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "app/**"
+      - ".github/workflows/windows-app.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write # only used to attach installers to a release, on tags
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            desktop/package-lock.json
+
+      - name: Install the app's dependencies
+        run: npm ci
+        working-directory: app
+
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: app
+
+      - name: Unit tests (core + QubitOS)
+        run: npm test -- --silent
+        working-directory: app
+
+      # No EXPO_WEB_BASE_URL here: the desktop build is served from the app's own qubitos:// origin,
+      # so the bundle must be referenced by root-absolute paths.
+      - name: Export the web build
+        run: npm run export:web
+        working-directory: app
+
+      - name: Install the desktop shell's dependencies
+        run: npm ci
+        working-directory: desktop
+
+      - name: Copy the web build into the shell
+        run: npm run sync
+        working-directory: desktop
+
+      - name: Build the Windows installer
+        run: npx electron-builder --win --publish never
+        working-directory: desktop
+
+      - name: List what was built
+        shell: bash
+        run: ls -lh desktop/release/*.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qubitos-windows
+          path: |
+            desktop/release/*.exe
+            desktop/release/*.blockmap
+            desktop/release/latest.yml
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach the installers to the release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" desktop/release/*.exe --clobber

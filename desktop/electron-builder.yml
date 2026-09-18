@@ -1,0 +1,40 @@
+appId: com.hero.qubitos
+productName: QubitOS
+copyright: Copyright © tapiocaTakeshi. MIT licensed.
+directories:
+  output: release
+  buildResources: build
+files:
+  - main.js
+  - package.json
+  - web/**/*
+# The renderer is a plain static bundle; nothing needs to stay outside the archive.
+asar: true
+compression: normal
+win:
+  icon: build/icon.ico
+  # Installer for everyday use, plus a portable exe that runs without installing.
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+    - target: portable
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: QubitOS
+  artifactName: QubitOS-${version}-windows-${arch}-setup.${ext}
+  uninstallDisplayName: QubitOS ${version}
+portable:
+  artifactName: QubitOS-${version}-windows-${arch}-portable.${ext}
+linux:
+  icon: build/icon.png
+  category: Science
+  target: [AppImage]
+mac:
+  icon: build/icon.png
+  category: public.app-category.education
+  target: [dmg]

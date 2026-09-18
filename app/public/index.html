@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+    <title>%WEB_TITLE%</title>
+    <meta
+      name="description"
+      content="QubitOS: a quantum computer whose qubits are APQBs (adjustable pseudo quantum bits), with a desktop, a shell and a package manager on top."
+    />
+
+    <!-- Installable web app: the manifest, icons and worker below are copied verbatim from app/public/,
+         so every URL here is relative and works both at / and under a project sub-path (/Qubit-Computer/). -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#e7e9fb" />
+    <meta name="color-scheme" content="light" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="application-name" content="QubitOS" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="QubitOS" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+        /* The boot screen's ink, so a cold launch of the installed app never flashes white. */
+        background-color: #0d0f1f;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
+    <noscript>
+      You need to enable JavaScript to run this app.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+
+    <!--
+      Install bootstrap. `beforeinstallprompt` is offered once, early, and only the event object can
+      reopen the browser's install dialog later — so it is captured here, before React mounts, and
+      handed to src/os/webinstall.ts (the kernel's WebInstaller) through window.__qubitos.
+    -->
+    <script>
+      (function () {
+        var w = window;
+        var state = (w.__qubitos = w.__qubitos || {});
+        state.installPrompt = null;
+        state.installed = false;
+        state.offlineReady = false;
+
+        w.addEventListener('beforeinstallprompt', function (event) {
+          event.preventDefault();
+          state.installPrompt = event;
+          w.dispatchEvent(new Event('qubitos:installavailable'));
+        });
+
+        w.addEventListener('appinstalled', function () {
+          state.installPrompt = null;
+          state.installed = true;
+        });
+
+        if ('serviceWorker' in navigator) {
+          w.addEventListener('load', function () {
+            navigator.serviceWorker
+              .register('sw.js')
+              .then(function () {
+                state.offlineReady = true;
+                w.dispatchEvent(new Event('qubitos:offlineready'));
+              })
+              .catch(function (err) {
+                console.warn('QubitOS: service worker registration failed', err);
+              });
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

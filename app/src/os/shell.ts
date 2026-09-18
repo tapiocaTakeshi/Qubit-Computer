@@ -64,6 +64,7 @@ export const HELP_GROUPS: Array<[string, string]> = [
   ['files', 'ls cat cd pwd mkdir rm write <path> <text> tree save <pid|last> <path> exec <circuit.json> sh <script.qsh>'],
   ['desktop', 'open <app|path|url> | windows | close <window id|app>   apps: ' + APP_ORDER.join(' ')],
   ['network', 'curl <url> | wget <url> <path> | qpm update | qpm search [q] | qpm install <name|url> | qpm remove <name> | qpm list'],
+  ['this app', 'install [--status]   # install QubitOS itself on this device (web build)'],
 ];
 
 export class Shell {
@@ -93,6 +94,7 @@ export class Shell {
       save: (a) => this.cmdSave(a), sh: (a) => this.cmdSh(a),
       open: (a) => this.cmdOpen(a), windows: () => this.cmdWindows(), close: (a) => this.cmdClose(a),
       curl: (a) => this.cmdCurl(a), wget: (a) => this.cmdWget(a), qpm: (a) => this.cmdQpm(a),
+      install: (a) => this.cmdInstall(a),
     };
     if (!kernel.pkg.runScript) kernel.pkg.runScript = (k, text, out) => new Shell(k, out).runScript(text);
   }
@@ -612,6 +614,33 @@ export class Shell {
       default:
         throw new Error('usage: qpm update | search [q] | install <name|url> | remove <name> | list | info <name>');
     }
+  }
+
+  /** Install QubitOS itself: replay the browser's install prompt, or explain how to do it by hand. */
+  private cmdInstall(a: string[]): void {
+    const st = this.k.webInstall.status();
+    if (parseArgs(a).opts.status || a[0] === 'status') {
+      this.out(this.k.webInstall.summary());
+      this.out(`supported=${st.supported} promptable=${st.promptable} installed=${st.installed} standalone=${st.standalone} offline=${st.offlineReady} browser=${st.platform}`);
+      if (st.manual) this.out(st.manual);
+      return;
+    }
+    if (!st.supported) throw new KernelError('install: this build is already a native app');
+    if (st.installed) {
+      this.out('QubitOS is already installed on this device.');
+      return;
+    }
+    this.async(async () => {
+      const outcome = await this.k.webInstall.install();
+      if (outcome === 'accepted') this.out('installing QubitOS — it will appear with your other apps');
+      else if (outcome === 'dismissed') this.out('install cancelled');
+      else if (outcome === 'installed') this.out('QubitOS is already installed on this device.');
+      else {
+        this.out('install: this browser did not offer an install prompt');
+        const manual = this.k.webInstall.status().manual;
+        if (manual) this.out(manual);
+      }
+    });
   }
 
   private cmdSh(a: string[]): void {

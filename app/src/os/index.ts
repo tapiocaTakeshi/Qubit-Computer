@@ -6,3 +6,4 @@ export * from './wm';
 export * from './net';
 export * from './pkg';
 export * from './util';
+export * from './webinstall';

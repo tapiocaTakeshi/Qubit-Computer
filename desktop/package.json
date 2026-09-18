@@ -1,0 +1,21 @@
+{
+  "name": "qubitos-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QubitOS as a desktop app: the Expo web build in an Electron window, packaged as a Windows installer",
+  "license": "MIT",
+  "author": "tapiocaTakeshi",
+  "main": "main.js",
+  "scripts": {
+    "build:web": "npm --prefix ../app run export:web",
+    "sync": "node scripts/sync-web.mjs",
+    "prepare:app": "npm run build:web && npm run sync",
+    "start": "npm run sync && electron .",
+    "pack": "npm run sync && electron-builder --dir --publish never",
+    "dist:win": "npm run sync && electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "^44.4.2",
+    "electron-builder": "^26.0.12"
+  }
+}

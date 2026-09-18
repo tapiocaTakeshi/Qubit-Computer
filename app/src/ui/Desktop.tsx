@@ -4,6 +4,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { launchTarget } from '../os/webinstall';
 import { APPS, AppId, BuiltinAppId, OSWindow, WindowManager, isBuiltinApp } from '../os/wm';
 import { BrowserApp } from './BrowserApp';
 import { ScriptApp } from './ScriptApp';
@@ -11,6 +12,7 @@ import { StoreApp } from './StoreApp';
 import { ActivityApp } from './ActivityApp';
 import { APQBScreen } from './APQBScreen';
 import { FinderApp } from './FinderApp';
+import { useWebInstall } from './InstallCard';
 import { useKernel } from './KernelContext';
 import { MemoryScreen } from './MemoryScreen';
 import { ProgramsScreen } from './ProgramsScreen';
@@ -140,6 +142,17 @@ function MenuItem({ title, onPress, bold }: { title: string; onPress: () => void
   );
 }
 
+/** Menu-bar shortcut, shown only while the browser is offering to install QubitOS. */
+function InstallPill() {
+  const { status, busy, install } = useWebInstall();
+  if (!status.promptable) return null;
+  return (
+    <Pressable onPress={install} disabled={busy} style={({ hovered, pressed }: PressState) => [styles.installPill, (hovered || pressed) && { opacity: 0.85 }]}>
+      <Text style={styles.installText}>{busy ? '…' : '⤓ Install'}</Text>
+    </Pressable>
+  );
+}
+
 function StatPill({ text, color, dot }: { text: string; color?: string; dot?: string }) {
   return (
     <View style={styles.statPill}>
@@ -202,6 +215,20 @@ function DockIcon({ id, icon, title, open, onPress, onLongPress }: { id: string;
   );
 }
 
+/**
+ * Which app opens at boot: `?app=<id>` when the installed app was launched from one of the
+ * manifest's shortcuts and the id is real, otherwise the Terminal.
+ */
+function bootApp(installed: (name: string) => unknown): AppId {
+  const search = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location?.search : undefined;
+  const id = launchTarget(search);
+  if (!id) return 'terminal';
+  if (isBuiltinApp(id)) return id;
+  if (id.startsWith('app:') && installed(id.slice(4))) return id as AppId;
+  if (installed(id)) return `app:${id}` as AppId;
+  return 'terminal';
+}
+
 export function Desktop() {
   const { kernel } = useKernel();
   const wm = useWindowManager();
@@ -213,7 +240,7 @@ export function Desktop() {
   const narrow = useWindowDimensions().width < 600;
 
   useEffect(() => {
-    if (booted && area.w > 0 && wm.windows.length === 0) wm.open('terminal');
+    if (booted && area.w > 0 && wm.windows.length === 0) wm.open(bootApp(kernel.pkg.get.bind(kernel.pkg)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booted, area.w > 0]);
 
@@ -243,6 +270,7 @@ export function Desktop() {
           <MenuItem title="Close" onPress={() => { if (focused) wm.close(focused.id); }} />
         )}
         <View style={{ flex: 1 }} />
+        <InstallPill />
         {!narrow ? <StatPill text={`${mem.free}/${mem.total} q`} /> : null}
         <StatPill text={`η ${kernel.systemAPQB().T.toFixed(2)}`} color={colors.accent} />
         <StatPill text={kernel.net.enabled ? 'online' : 'offline'} dot={kernel.net.enabled ? colors.ok : colors.faint} />
@@ -311,6 +339,8 @@ const styles = StyleSheet.create({
   menuText: { fontFamily: sans, fontSize: 13, color: colors.text, letterSpacing: -0.1 },
   menuApp: { fontWeight: '700', flexShrink: 1 },
   menuStat: { fontFamily: mono, fontSize: 10.5, color: colors.dim, fontVariant: ['tabular-nums'] },
+  installPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: colors.accent, marginHorizontal: 3, ...shadow.glow, ...web({ cursor: 'pointer' }) },
+  installText: { fontFamily: sans, fontSize: 11.5, fontWeight: '700', color: colors.onAccent, letterSpacing: -0.1 },
   statPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: 'rgba(20,24,48,0.06)', marginHorizontal: 3 },
   statDot: { width: 6, height: 6, borderRadius: 3 },
   desktop: { flex: 1, overflow: 'hidden' },
