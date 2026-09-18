@@ -1,0 +1,37 @@
+# QubitOS demo script: run with `qubitos examples/demo.qsh`
+uname
+echo --- APQB basics (paper Eq. 1-9)
+apqb 0.3
+apqb --r -0.5
+echo --- Bell-type APQB state: concurrence C2 = eta (paper Eq. 12-14)
+run bell_apqb 0.4 --shots 512 --seed 7
+ent last
+echo --- GHZ-type APQB state: three-tangle tau3 = eta^2 (paper Eq. 15-17)
+run ghz_apqb 0.4 --shots 512 --seed 7
+ent last
+echo --- Correlation register (paper Eq. 18) and subset features (Eq. 19/22)
+run encode 0.9 0.0 -0.6 --shots 256 --seed 1
+run features 0.2 0.5 0.9 --K 2
+echo --- Standard algorithms on APQB hardware
+run teleport 0.7 --shots 1
+run grover 101 --seed 0 --shots 256
+run deutsch_jozsa 3 balanced --shots 16
+echo --- Manual register programming through syscalls
+alloc 3 --name reg --theta 0.2,0.5,0.9
+readout 1
+gate 1 cx 0 1
+gate 1 cry 1 2 --p 0.8
+state 1
+measure 1 --shots 100
+free 1
+echo --- QBNN job (paper Eq. 23-32): XOR needs a K=2 gate
+run qbnn_train xor --K 2 --epochs 60 --seed 1
+run qbnn_eval /lib/qbnn/xor_K2.json 1 -1
+echo --- APQB scheduler: theta tunes exploration eps = p_min + (p_max - p_min) * eta
+sysctl apqb.theta 0.25pi
+spawn bell --prio 1
+spawn ghz 4 --prio 9
+spawn qft 3 --prio 5
+sched
+ps
+dmesg 6
