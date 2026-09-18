@@ -1,0 +1,6 @@
+node_modules/
+web/
+release/
+
+# The repo-wide "build/" rule would otherwise hide the app icons.
+!build/
