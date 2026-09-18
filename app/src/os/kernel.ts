@@ -4,6 +4,7 @@
  * the system APQB), syscalls, filesystem and dmesg.
  */
 import { APQB, thetaFromR } from '../core/apqb';
+import { availableBackends, BackendInfo, resolveBackend } from '../core/backend';
 import { Circuit } from '../core/circuit';
 import { QubitComputer, Result } from '../core/computer';
 import * as G from '../core/gates';
@@ -79,6 +80,7 @@ export interface KernelOptions {
   seed?: number;
   theta?: number;
   fsSnapshot?: FSDir;
+  backend?: string;
 }
 
 export type SysctlValue = number | string | boolean;
@@ -105,18 +107,21 @@ export class Kernel {
   wm: WindowManager | null = null;
   net: NetStack;
   pkg: PackageManager;
+  backendInfo: BackendInfo;
 
   constructor(opts: KernelOptions = {}) {
     const numQubits = opts.numQubits ?? 16;
     const theta = opts.theta ?? 0.2;
+    this.backendInfo = resolveBackend(opts.backend ?? 'cpu', (msg) => this.log(msg));
     this.hw = new QubitComputer(numQubits);
     this.numQubits = numQubits;
     this.fs = new QubitFS(opts.fsSnapshot);
     this.rng = new Rng(opts.seed);
     this.seed = opts.seed;
-    this.sysctl = { 'apqb.theta': theta, 'sched.p_min': 0, 'sched.p_max': 0.5, 'hw.num_qubits': numQubits, 'run.shots': 1024, 'net.enabled': true, 'net.timeout_ms': 15000, 'net.retries': 2, 'net.registry': DEFAULT_REGISTRIES.join(',') };
+    this.sysctl = { 'apqb.theta': theta, 'sched.p_min': 0, 'sched.p_max': 0.5, 'hw.num_qubits': numQubits, 'run.shots': 1024, 'net.enabled': true, 'net.timeout_ms': 15000, 'net.retries': 2, 'net.registry': DEFAULT_REGISTRIES.join(','), 'hardware.backend': this.backendInfo.name };
     this.freeQubits = [...Array(numQubits).keys()];
     this.log(`${OS_NAME} ${OS_VERSION} booting on APQB hardware: ${numQubits} physical qubits`);
+    this.log(`hardware backend: ${this.backendInfo.name} (engine=${this.backendInfo.engine}) - ${this.backendInfo.detail}`);
     this.log(`system APQB theta=${theta.toFixed(3)} -> r=${Math.cos(2 * theta) >= 0 ? '+' : ''}${Math.cos(2 * theta).toFixed(3)} eta=${Math.abs(Math.sin(2 * theta)).toFixed(3)} (scheduler exploration eps=${this.explorationRate().toFixed(3)})`);
     this.log(`fs: ${opts.fsSnapshot ? 'restored snapshot' : 'fresh'}; ${Object.keys(this.programs).length} programs in /bin`);
     this.refreshBin();
@@ -146,7 +151,16 @@ export class Kernel {
   }
 
   sysUname() {
-    return { os: OS_NAME, version: OS_VERSION, hardware: 'APQB state-vector', numQubits: this.numQubits, uptimeMs: Date.now() - this.bootTime, programs: Object.keys(this.programs).sort() };
+    return { os: OS_NAME, version: OS_VERSION, hardware: 'APQB state-vector', backend: this.backendInfo.name, numQubits: this.numQubits, uptimeMs: Date.now() - this.bootTime, programs: Object.keys(this.programs).sort() };
+  }
+
+  // ------------------------------------------------------------ backend
+  /** `sysBackend()`: report current + available backends. `sysBackend(name)`: switch. */
+  sysBackend(name?: string): unknown {
+    if (name === undefined) {
+      return { current: this.backendInfo.name, engine: this.backendInfo.engine, detail: this.backendInfo.detail, available: availableBackends() };
+    }
+    return this.sysSysctl('hardware.backend', name);
   }
 
   // ------------------------------------------------------- sysctl/APQB
@@ -172,6 +186,14 @@ export class Kernel {
     if (!(k in this.sysctl)) throw new KernelError(`unknown sysctl key '${key}'`);
     if (value === undefined) return this.sysctl[k];
     const old = this.sysctl[k];
+    if (k === 'hardware.backend') {
+      const info = resolveBackend(value, (msg) => this.log(msg));
+      this.backendInfo = info;
+      this.sysctl[k] = info.name;
+      this.log(`sysctl ${k}: ${old} -> ${info.name} (engine=${info.engine})`);
+      this.notify();
+      return info.name;
+    }
     let nv: SysctlValue;
     if (typeof old === 'boolean') nv = ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
     else if (typeof old === 'number') {

@@ -21,6 +21,7 @@ dependencies = []
 
 [project.optional-dependencies]
 test = ["pytest"]
+gpu = ["numpy"]
 
 [project.scripts]
 qubitos = "qubit_computer.os.boot:main"

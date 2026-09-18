@@ -1,4 +1,5 @@
 export * from './apqb';
+export * from './backend';
 export * from './complex';
 export * from './rng';
 export * as gates from './gates';

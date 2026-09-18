@@ -36,6 +36,7 @@ r² + η² = 1                                                 (Eq. 9)
 | モジュール | 内容 |
 | :--- | :--- |
 | `qubit_computer/apqb.py` | APQB 本体。`APQB(θ)`, `from_r`, `from_latent`, r / T / z / 密度行列 / エントロピー / Chebyshev 特徴 |
+| `qubit_computer/backend.py` | ハードウェアバックエンド選択（CPU / GPU / Q-NPU）。`resolve`, `available_backends` |
 | `qubit_computer/gates.py` | ゲート行列。APQB 固有ゲート `apqb(θ)=RY(2θ)`, `apqb_r(r)`, `apqb_a(a)`, `capqb` |
 | `qubit_computer/state.py` | 状態ベクトルエンジン、測定、縮約密度行列からの APQB 読み出し、`concurrence`, `three_tangle` |
 | `qubit_computer/circuit.py` | 回路ビルダー（メソッドチェーン、JSON 入出力、逆回路、ASCII 描画） |
@@ -61,7 +62,7 @@ qubitos --fs ~/.qubitos.json  # 仮想ファイルシステムを永続化
 python -m qubit_computer      # 同じ
 ```
 
-起動時のオプション：`-q/--qubits N`（物理量子ビット数、既定 16）、`--seed`、`--theta`（システム APQB の角度）、`--quiet`。
+起動時のオプション：`-q/--qubits N`（物理量子ビット数、既定 16）、`--seed`、`--theta`（システム APQB の角度）、`--backend cpu|gpu|qnpu`（既定 `cpu`、詳細は後述）、`--quiet`。
 
 ---
 
@@ -92,6 +93,43 @@ eps = sched.p_min + (sched.p_max − sched.p_min) · η(θ)
 
 確率 `eps` でランダムな READY プロセスを選び（探索）、それ以外は最高優先度を選びます（活用）。`apqb.theta = 0` なら完全に決定論的な優先度スケジューリング、`apqb.theta = π/4` なら η = 1 で最大限の探索になります。OS の振る舞い自体が「確信度 r とゆらぎ η のトレードオフ」で制御される、というのが QubitOS の設計思想です。
 
+### ハードウェアバックエンド（CPU / GPU / Q-NPU）
+
+APQB / QBNN は物理量子ビットではなく、古典計算機上で動く量子インスパイアモデルです（論文 Sec. 3.3 / 7.2）。したがって「バックエンド」は量子プロセッサの選択ではなく、状態ベクトル / QBNN の演算をどの古典デバイスに担わせるかの選択です。将来構想の
+
+```text
+QubitOS
+ ├─ CPU
+ ├─ GPU
+ └─ Q-NPU（APQB Engine / Interaction Engine / QBNN Engine）
+```
+
+に対応する 3 つの値を `sysctl hardware.backend`（既定 `cpu`）で切り替えます。
+
+| backend | 状態 | 実体 |
+| :--- | :--- | :--- |
+| `cpu` | 常に利用可能 | 依存ライブラリなしの参照実装（既定） |
+| `gpu` | numpy がインストールされていれば利用可能 | `StateVector.apply` を numpy でベクトル化（CUDA/ROCm 対応の numpy や cupy を入れれば実デバイス実行に置き換え可能） |
+| `qnpu` | 常に未実装 | APQB/QBNN 専用プロセッサ（将来のハードウェア。ドライバは未実装） |
+
+未対応のバックエンドを選んでも例外にはならず、必ず `cpu` にフォールバックして理由を `dmesg` に記録します（Q-NPU は現状常にこの経路を通ります）。バックエンドの選択は数値結果に影響しません（`tests/test_backend.py` で cpu/gpu の出力を数値的に一致させています）。
+
+```bash
+qubitos --backend gpu          # numpy があれば有効。無ければ自動的に cpu で起動
+```
+
+```text
+qubitos:/$ backend
+current: cpu (engine=pure-python)
+  * cpu   available   engine=pure-python dependency-free reference state-vector engine (always available)
+    gpu   available   engine=numpy    vectorized amplitude updates via numpy (...)
+    qnpu  unavailable engine=-        Q-NPU (...) is a planned future backend; no hardware or driver exists yet
+qubitos:/$ backend gpu
+backend = gpu
+```
+
+`numpy` は必須ではなく `pip install -e ".[gpu]"` で入れるオプション拡張です（デフォルトの依存ライブラリなし方針は変わりません）。React Native アプリ（`app/`）の Settings にも同じ 3 択の UI がありますが、こちらは現状デバイス加速の実装がないため `gpu` / `qnpu` を選ぶと `cpu` にフォールバックします（選択・レポートの UI としては Python 側と同じ API 形です）。
+
 ### プロセスとプログラム
 
 `/bin` のプログラムは 2 種類あります。
@@ -110,7 +148,7 @@ eps = sched.p_min + (sched.p_max − sched.p_min) · η(θ)
 ## シェル (qsh) コマンド
 
 ```text
-system     help uname uptime dmesg sysctl [key [value]] motd echo exit
+system     help uname uptime dmesg sysctl [key [value]] backend [cpu|gpu|qnpu] motd echo exit
 processes  run <prog> [args] [--shots N --seed S --prio P] | spawn | sched | ps | kill <pid> | log <pid> | result <pid|last> | draw <prog>
 memory     alloc <n> [--name x --theta t1,t2 | --r r1,r2 | --a a1,a2] | free <sid> | mem | reset <sid>
 registers  gate <sid> <gate> <q..> [--p a,b] | measure <sid> [q..] [--shots N] | readout <sid> | state <sid> | ent <sid|last|pid>

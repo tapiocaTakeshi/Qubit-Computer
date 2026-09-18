@@ -5,10 +5,11 @@ from __future__ import annotations
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 from . import gates as G
 from .apqb import APQB
+from .backend import Backend, BackendInfo, resolve
 from .circuit import Circuit
 from .state import APQBReadout, StateVector
 
@@ -82,14 +83,27 @@ class QubitComputer:
     True
     """
 
-    def __init__(self, max_qubits: int = 20):
+    def __init__(self, max_qubits: int = 20, backend: Union[str, Backend] = Backend.CPU):
         self.max_qubits = max_qubits
+        # Silent resolve: a caller passing an unavailable backend directly
+        # (bypassing the kernel, which logs the fallback) still gets a
+        # correct, working engine rather than an exception.
+        self.backend_info: BackendInfo = resolve(backend)
+
+    def set_backend(self, backend: Union[str, Backend],
+                    on_warning: Optional[Callable[[str], None]] = None) -> BackendInfo:
+        self.backend_info = resolve(backend, on_warning=on_warning)
+        return self.backend_info
 
     # ------------------------------------------------------------ core
+    def _tag(self, sv: StateVector) -> StateVector:
+        sv.backend = self.backend_info.name
+        return sv
+
     def initial_state(self, circuit: Circuit) -> StateVector:
         if circuit.initial_apqbs is not None:
-            return StateVector.from_apqbs(circuit.initial_apqbs)
-        return StateVector(circuit.num_qubits)
+            return self._tag(StateVector.from_apqbs(circuit.initial_apqbs))
+        return self._tag(StateVector(circuit.num_qubits))
 
     def statevector(self, circuit: Circuit, rng: Optional[random.Random] = None,
                     memory: Optional[List[str]] = None) -> StateVector:
@@ -188,7 +202,7 @@ class QubitComputer:
     # ------------------------------------------------------- shortcuts
     def prepare(self, apqbs: Sequence[APQB]) -> StateVector:
         """Directly prepare a register of APQBs (no circuit)."""
-        return StateVector.from_apqbs(apqbs)
+        return self._tag(StateVector.from_apqbs(apqbs))
 
     def readout(self, circuit: Circuit) -> List[APQBReadout]:
         """APQB observables of every qubit after running ``circuit``."""

@@ -56,7 +56,7 @@ export function splitCommands(line: string): string[] {
 }
 
 export const HELP_GROUPS: Array<[string, string]> = [
-  ['system', 'help uname uptime dmesg sysctl [key [value]] motd echo clear'],
+  ['system', 'help uname uptime dmesg sysctl [key [value]] backend [cpu|gpu|qnpu] motd echo clear'],
   ['processes', 'run <prog> [args] [--shots N --seed S --prio P] | spawn <prog> [args] | sched | ps | kill <pid> | log <pid> | result <pid|last> | draw <prog> [args]'],
   ['memory', 'alloc <n> [--name x --theta t1,t2,.. | --r r1,r2,..] | free <sid> | mem | reset <sid>'],
   ['registers', 'gate <sid> <gate> <q..> [--p a,b] | measure <sid> [q..] [--shots N] | readout <sid> | state <sid> | ent <sid|last|pid>'],
@@ -80,7 +80,7 @@ export class Shell {
     this.out = out;
     this.commands = {
       help: (a) => this.cmdHelp(a), '?': (a) => this.cmdHelp(a), uname: () => this.cmdUname(), uptime: () => this.cmdUptime(),
-      dmesg: (a) => this.cmdDmesg(a), sysctl: (a) => this.cmdSysctl(a), echo: (a) => this.out(a.join(' ')), motd: () => this.cmdMotd(),
+      dmesg: (a) => this.cmdDmesg(a), sysctl: (a) => this.cmdSysctl(a), backend: (a) => this.cmdBackend(a), echo: (a) => this.out(a.join(' ')), motd: () => this.cmdMotd(),
       clear: () => this.onClear?.(),
       run: (a) => this.cmdRun(a), spawn: (a) => this.cmdSpawn(a), sched: (a) => this.cmdSched(a), ps: () => this.cmdPs(),
       kill: (a) => this.cmdKill(a), log: (a) => this.cmdLog(a), result: (a) => this.cmdResult(a), draw: (a) => this.cmdDraw(a),
@@ -231,6 +231,19 @@ export class Shell {
     let [key, val] = a;
     if (key.includes('=') && a.length === 1) [key, val] = key.split('=', 2) as [string, string];
     this.out(`${key} = ${this.k.sysSysctl(key, val)}`);
+  }
+
+  private cmdBackend(a: string[]): void {
+    if (!a.length) {
+      const info = this.k.sysBackend() as { current: string; engine: string; available: Array<{ name: string; available: boolean; engine: string; detail: string }> };
+      this.out(`current: ${info.current} (engine=${info.engine})`);
+      for (const b of info.available) {
+        const flag = b.name === info.current ? '*' : ' ';
+        this.out(`  ${flag} ${b.name.padEnd(5)} ${(b.available ? 'available' : 'unavailable').padEnd(11)} engine=${b.engine.padEnd(8)} ${b.detail}`);
+      }
+      return;
+    }
+    this.out(`backend = ${this.k.sysBackend(a[0])}`);
   }
 
   private cmdMotd(): void {

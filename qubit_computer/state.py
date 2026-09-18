@@ -15,6 +15,7 @@ import random
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .apqb import APQB, theta_from_r
+from .backend import Backend
 from .gates import Matrix
 
 __all__ = ["StateVector", "APQBReadout"]
@@ -49,6 +50,9 @@ class StateVector:
             raise ValueError("a register needs at least one qubit")
         self.n = num_qubits
         self.dim = 1 << num_qubits
+        # Which device drives ``apply()``; see backend.py. Defaults to the
+        # pure-Python engine so every existing caller is unaffected.
+        self.backend: Backend = Backend.CPU
         if amplitudes is None:
             self.amp: List[complex] = [0j] * self.dim
             self.amp[0] = 1 + 0j
@@ -93,7 +97,9 @@ class StateVector:
         return sv
 
     def copy(self) -> "StateVector":
-        return StateVector(self.n, list(self.amp))
+        sv = StateVector(self.n, list(self.amp))
+        sv.backend = self.backend
+        return sv
 
     # ------------------------------------------------------------ helpers
     def normalize(self) -> None:
@@ -141,6 +147,13 @@ class StateVector:
         if len(set(targets)) != k:
             raise ValueError("targets must be distinct")
 
+        if self.backend is Backend.GPU:
+            try:
+                self._apply_numpy(matrix, targets)
+                return self
+            except ImportError:
+                pass  # numpy not actually importable; fall through to pure-python
+
         if k == 1:
             self._apply_1q(matrix, targets[0])
             return self
@@ -174,6 +187,29 @@ class StateVector:
                 new_amp[idxs[row]] = acc
         self.amp = new_amp
         return self
+
+    def _apply_numpy(self, matrix: Matrix, targets: Sequence[int]) -> None:
+        """Vectorized ``apply()`` via numpy (the ``gpu`` backend).
+
+        Reshapes the ``2**n`` amplitude vector into an ``n``-axis tensor
+        (one length-2 axis per qubit), moves the target axes to the front
+        so the gate becomes a single batched matrix multiply, then moves
+        them back. Mathematically identical to ``apply()``'s pure-Python
+        path -- see ``tests/test_backend.py`` for the cross-check.
+        """
+        import numpy as np
+
+        k = len(targets)
+        n = self.n
+        axes = [n - 1 - t for t in targets]
+        other = [ax for ax in range(n) if ax not in axes]
+        perm = axes + other
+        arr = np.asarray(self.amp, dtype=complex).reshape((2,) * n)
+        arr = np.transpose(arr, perm).reshape(1 << k, -1)
+        out = np.asarray(matrix, dtype=complex) @ arr
+        out = out.reshape((2,) * n)
+        out = np.transpose(out, np.argsort(perm))
+        self.amp = [complex(x) for x in out.reshape(-1)]
 
     def _apply_1q(self, m: Matrix, t: int) -> None:
         bit = 1 << t

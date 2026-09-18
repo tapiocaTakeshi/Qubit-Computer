@@ -28,8 +28,8 @@ BANNER = r"""
 
 
 def boot(num_qubits: int = 16, fs_path: Optional[str] = None, seed: Optional[int] = None,
-         theta: float = 0.2, quiet: bool = False, out=print) -> Kernel:
-    kernel = Kernel(num_qubits=num_qubits, fs_path=fs_path, seed=seed, theta=theta)
+         theta: float = 0.2, quiet: bool = False, backend: str = "cpu", out=print) -> Kernel:
+    kernel = Kernel(num_qubits=num_qubits, fs_path=fs_path, seed=seed, theta=theta, backend=backend)
     if not quiet:
         out(BANNER.format(name=OS_NAME, version=OS_VERSION))
         for line in kernel.sys_dmesg():
@@ -45,11 +45,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--fs", help="persist the virtual filesystem to this JSON file")
     parser.add_argument("--seed", type=int, help="seed for measurements and the scheduler")
     parser.add_argument("--theta", type=float, default=0.2, help="system APQB angle (scheduler exploration)")
+    parser.add_argument("--backend", default="cpu", choices=["cpu", "gpu", "qnpu"],
+                        help="compute backend: cpu (default) | gpu (numpy, if installed) | qnpu (future hardware)")
     parser.add_argument("--quiet", action="store_true", help="suppress the boot banner")
     args = parser.parse_args(argv)
 
     kernel = boot(num_qubits=args.qubits, fs_path=args.fs, seed=args.seed, theta=args.theta,
-                  quiet=args.quiet or bool(args.command))
+                  backend=args.backend, quiet=args.quiet or bool(args.command))
     shell = Shell(kernel)
     if args.command:
         status = shell.execute_line(args.command)
