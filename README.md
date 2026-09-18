@@ -99,8 +99,8 @@ Terminal の `install` コマンドのいずれからでもインストールで
 ### Windows アプリ
 
 同じ Web ビルドを Electron で包んだデスクトップ版です。インストーラ（`QubitOS-<version>-windows-x64-setup.exe`）と
-インストール不要の portable 版を GitHub Actions がビルドします。手元でビルドする手順は
-[desktop/README.md](desktop/README.md) にあります。
+インストール不要の portable 版を GitHub Actions がビルドし、リリースを publish するとそこに添付されます。
+手元でビルドする手順は [desktop/README.md](desktop/README.md) にあります。
 
 ---
 

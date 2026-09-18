@@ -1,16 +1,21 @@
 name: Windows App (QubitOS)
 
 # Builds the QubitOS desktop app: the same Expo web build, wrapped in Electron and packaged as a
-# Windows installer (.exe) plus a portable .exe. Run it by hand, or push a v* tag to attach the
-# installers to a GitHub release.
+# Windows installer (.exe) plus a portable .exe. Every change to the desktop shell is built; the
+# installers are attached to a GitHub release when one is published.
 on:
   push:
-    tags: ["v*"]
+    branches: ["**"]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/windows-app.yml"
   pull_request:
     paths:
       - "desktop/**"
       - "app/**"
       - ".github/workflows/windows-app.yml"
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -78,11 +83,9 @@ jobs:
           retention-days: 30
 
       - name: Attach the installers to the release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'release'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "QubitOS $tag" --generate-notes
-          gh release upload "$tag" desktop/release/*.exe --clobber
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" desktop/release/*.exe --clobber

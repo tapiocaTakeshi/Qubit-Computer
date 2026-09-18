@@ -36,7 +36,8 @@ npm run pack             # 現在の OS 向けに展開ビルドのみ（動作�
 | `QubitOS-<version>-windows-x64-portable.exe` | インストールせずにそのまま起動する版 |
 
 GitHub Actions の **Windows App (QubitOS)** ワークフローが同じ手順を `windows-latest` で実行します。
-手動実行ではインストーラがアーティファクトとして残り、`v*` タグを push するとそのリリースに添付されます。
+`desktop/` を変更した push とプルリクエストで走り、インストーラはアーティファクトとして残ります。
+GitHub でリリースを publish すると、同じインストーラがそのリリースに添付されます。
 
 コード署名はしていないので、初回起動時に Windows SmartScreen の警告が出ます（「詳細情報」→「実行」）。
 署名する場合は electron-builder の `win.certificateFile` / `CSC_LINK` を設定してください。
