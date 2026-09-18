@@ -113,6 +113,32 @@ Terminal / Finder / App Store / QBNN Lab を直接開けます。これは `?app
 
 ---
 
+## スマホアプリ版（Android APK）
+
+`app.config.js` にはすでに `ios.bundleIdentifier` / `android.package` と EAS のプロジェクト ID が
+設定済みで、このコードはそのままネイティブアプリとしてビルドできます。GitHub Actions の
+**Android App (QubitOS)** ワークフローが `expo prebuild --platform android` でネイティブプロジェクトを
+生成し、Gradle でデバッグ署名の APK（`app-debug.apk`）をビルドしてアーティファクトに残します
+（`app/` を変更した push / PR、および `workflow_dispatch` で走ります）。ストア配布用の署名は行って
+いないので、この APK は「提供元不明のアプリ」として端末に直接インストールする用途向けです。
+
+手元でビルドする場合：
+
+```bash
+cd app
+npm install
+npx expo prebuild --platform android   # ./android を生成（.gitignore 対象、コミットしない）
+cd android && ./gradlew assembleDebug  # Android SDK が必要
+```
+
+実機・エミュレータに直接インストールして動作確認するだけなら `npm run android`
+（`expo run:android`、Android SDK が必要）でも起動できます。iOS も同様に
+`npx expo prebuild --platform ios` → Xcode でビルド、または `npm run ios`（macOS が必要）です。
+Play Store / App Store 向けのリリースビルドと提出には `eas build` / `eas submit`（`eas.json` に
+プロファイル設定済み）を使ってください。
+
+---
+
 ## デスクトップ版（Electron / Windows インストーラ）
 
 同じ Web ビルドを Electron で包んだデスクトップ版が [`desktop/`](../desktop/README.md) です。

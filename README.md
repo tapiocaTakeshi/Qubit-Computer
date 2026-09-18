@@ -52,7 +52,7 @@ r² + η² = 1                                                 (Eq. 9)
 
 ## インストールと起動
 
-インストール方法は 4 つあります。用途で選んでください。
+インストール方法は 5 つあります。用途で選んでください。
 
 | 方法 | 対象 | コマンド / 入口 |
 | :--- | :--- | :--- |
@@ -60,6 +60,7 @@ r² + η² = 1                                                 (Eq. 9)
 | **pip** | Python パッケージとして組み込む | `pip install -e .` |
 | **Web アプリ（PWA）** | ブラウザからそのままインストール | [GitHub Pages 版](https://tapiocatakeshi.github.io/Qubit-Computer/) の「Install」 |
 | **Windows アプリ** | インストーラ（.exe）でデスクトップアプリとして | [Releases](https://github.com/tapiocaTakeshi/Qubit-Computer/releases) の `QubitOS-*-setup.exe` |
+| **Android アプリ** | スマホにインストールする APK（サイドロード） | Actions の **Android App (QubitOS)** から `qubitos-android` アーティファクトを取得 |
 
 ### Homebrew（qubitos コマンド）
 
@@ -102,6 +103,14 @@ Terminal の `install` コマンドのいずれからでもインストールで
 同じ Web ビルドを Electron で包んだデスクトップ版です。インストーラ（`QubitOS-<version>-windows-setup.exe`）と
 インストール不要の portable 版を GitHub Actions がビルドし、リリースを publish するとそこに添付されます。
 手元でビルドする手順は [desktop/README.md](desktop/README.md) にあります。
+
+### Android アプリ
+
+`app/` の React Native（Expo）コードをそのままネイティブアプリとしてビルドしたものです。GitHub Actions の
+**Android App (QubitOS)** ワークフローが `expo prebuild` + Gradle でデバッグ署名の APK をビルドし、
+`qubitos-android` アーティファクトとして残します（リリースを publish するとそこにも添付されます）。
+ストア配布用の署名はしていないので、端末では「提供元不明のアプリ」としてインストールしてください。
+手元でビルドする手順は [app/README.md](app/README.md#スマホアプリ版android-apk) にあります。
 
 ---
 

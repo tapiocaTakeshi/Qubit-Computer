@@ -1,0 +1,83 @@
+name: Android App (QubitOS)
+
+# Builds QubitOS as an installable Android APK: the same Expo app used by the web and Windows
+# builds, turned into a native project with `expo prebuild` and compiled with Gradle. There is no
+# release keystore configured, so this is a debug-signed APK — installable by sideloading, not
+# something to publish to the Play Store (use `eas build --platform android` for that).
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "app/**"
+      - ".github/workflows/android-app.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - ".github/workflows/android-app.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # only used to attach the APK to a release, on tags
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install the app's dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests (core + QubitOS)
+        run: npm test -- --silent
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # ubuntu-latest ships the Android SDK preinstalled (ANDROID_HOME is already set), so prebuild
+      # picks it up on its own and writes android/local.properties.
+      - name: Generate the native Android project
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build a debug APK
+        working-directory: app/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: List what was built
+        run: ls -lh android/app/build/outputs/apk/debug/*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qubitos-android
+          path: app/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach the APK to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -eux
+          version=$(node -p "require('./package.json').version")
+          gh release upload "$TAG" "android/app/build/outputs/apk/debug/app-debug.apk#QubitOS-${version}-android.apk" --clobber
