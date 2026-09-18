@@ -1,0 +1,12 @@
+{
+  "name": "qbnn-xor",
+  "version": "1.0.0",
+  "title": "QBNN XOR",
+  "icon": "∿",
+  "kind": "script",
+  "description": "Train a K=2 QBNN on XOR and evaluate it (paper Sec. 6, H1).",
+  "main": "/apps/qbnn-xor/main.qsh",
+  "files": {
+    "/apps/qbnn-xor/main.qsh": "echo == QBNN XOR (K=2) ==\nrun qbnn_train xor --K 2 --epochs 60 --seed 1\nrun qbnn_eval /lib/qbnn/xor_K2.json 1 -1\nrun qbnn_eval /lib/qbnn/xor_K2.json 1 1\n"
+  }
+}

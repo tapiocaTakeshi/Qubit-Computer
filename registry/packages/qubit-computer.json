@@ -1,0 +1,9 @@
+{
+  "name": "qubit-computer",
+  "version": "1.0.0",
+  "title": "Qubit Computer",
+  "icon": "💻",
+  "kind": "web",
+  "description": "Source and docs of Qubit Computer / QubitOS.",
+  "url": "https://github.com/tapiocaTakeshi/Qubit-Computer"
+}

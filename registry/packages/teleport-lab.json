@@ -1,0 +1,13 @@
+{
+  "name": "teleport-lab",
+  "version": "1.0.0",
+  "title": "Teleport Lab",
+  "icon": "📡",
+  "kind": "script",
+  "description": "Teleport APQBs with several θ and read θ back on the receiving qubit.",
+  "main": "/apps/teleport-lab/main.qsh",
+  "files": {
+    "/apps/teleport-lab/main.qsh": "echo == APQB teleportation ==\ndraw teleport 0.7\nrun teleport 0.2 --shots 1\nrun teleport 0.7 --shots 1\nrun teleport 1.2 --shots 1\necho q2 theta should equal the sent theta each time\n",
+    "/apps/teleport-lab/circuit.json": "{\"name\": \"teleport_0.7\", \"num_qubits\": 3, \"instructions\": [{\"gate\": \"apqb\", \"targets\": [0], \"params\": [0.7]}, {\"gate\": \"h\", \"targets\": [1]}, {\"gate\": \"cx\", \"targets\": [1, 2]}, {\"gate\": \"cx\", \"targets\": [0, 1]}, {\"gate\": \"h\", \"targets\": [0]}, {\"gate\": \"cx\", \"targets\": [1, 2]}, {\"gate\": \"cz\", \"targets\": [0, 2]}]}"
+  }
+}

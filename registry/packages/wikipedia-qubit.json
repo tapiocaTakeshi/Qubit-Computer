@@ -1,0 +1,9 @@
+{
+  "name": "wikipedia-qubit",
+  "version": "1.0.0",
+  "title": "Wikipedia: Qubit",
+  "icon": "📖",
+  "kind": "web",
+  "description": "Background reading on qubits, Bloch spheres and entanglement.",
+  "url": "https://en.m.wikipedia.org/wiki/Qubit"
+}

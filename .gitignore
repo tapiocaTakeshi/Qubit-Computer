@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.qubitos*.json
+
+# React Native app
+app/node_modules/
+app/dist/
+app/.expo/
+app/web-build/

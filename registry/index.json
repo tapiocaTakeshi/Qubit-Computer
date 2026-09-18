@@ -1,0 +1,68 @@
+{
+  "name": "QubitOS registry",
+  "packages": [
+    {
+      "name": "bell-lab",
+      "version": "1.0.0",
+      "title": "Bell Lab",
+      "description": "Sweep θ over the |Ψ2(θ)> family and check concurrence C2 = η (paper Eq. 13-14).",
+      "icon": "🔔",
+      "kind": "script",
+      "url": "packages/bell-lab.json"
+    },
+    {
+      "name": "grover-demo",
+      "version": "1.0.0",
+      "title": "Grover Demo",
+      "description": "Grover search on 3 and 4 qubits, drawn and executed on the APQB hardware.",
+      "icon": "🔎",
+      "kind": "script",
+      "url": "packages/grover-demo.json"
+    },
+    {
+      "name": "teleport-lab",
+      "version": "1.0.0",
+      "title": "Teleport Lab",
+      "description": "Teleport APQBs with several θ and read θ back on the receiving qubit.",
+      "icon": "📡",
+      "kind": "script",
+      "url": "packages/teleport-lab.json"
+    },
+    {
+      "name": "qbnn-xor",
+      "version": "1.0.0",
+      "title": "QBNN XOR",
+      "description": "Train a K=2 QBNN on XOR and evaluate it (paper Sec. 6, H1).",
+      "icon": "∿",
+      "kind": "script",
+      "url": "packages/qbnn-xor.json"
+    },
+    {
+      "name": "qubit-ai",
+      "version": "1.0.0",
+      "title": "Qubit AI",
+      "description": "The Qubit AI repository: APQB / QBNN theory and the NeuroQuantum models.",
+      "icon": "⚛",
+      "kind": "web",
+      "url": "packages/qubit-ai.json"
+    },
+    {
+      "name": "qubit-computer",
+      "version": "1.0.0",
+      "title": "Qubit Computer",
+      "description": "Source and docs of Qubit Computer / QubitOS.",
+      "icon": "💻",
+      "kind": "web",
+      "url": "packages/qubit-computer.json"
+    },
+    {
+      "name": "wikipedia-qubit",
+      "version": "1.0.0",
+      "title": "Wikipedia: Qubit",
+      "description": "Background reading on qubits, Bloch spheres and entanglement.",
+      "icon": "📖",
+      "kind": "web",
+      "url": "packages/wikipedia-qubit.json"
+    }
+  ]
+}

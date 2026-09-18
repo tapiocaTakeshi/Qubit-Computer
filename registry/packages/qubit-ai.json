@@ -1,0 +1,9 @@
+{
+  "name": "qubit-ai",
+  "version": "1.0.0",
+  "title": "Qubit AI",
+  "icon": "⚛",
+  "kind": "web",
+  "description": "The Qubit AI repository: APQB / QBNN theory and the NeuroQuantum models.",
+  "url": "https://github.com/tapiocaTakeshi/Qubit"
+}
