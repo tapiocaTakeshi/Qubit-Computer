@@ -35,8 +35,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+from .. import backend as backend_mod
 from .. import gates as G
 from ..apqb import APQB, theta_from_r
+from ..backend import BackendInfo
 from ..circuit import Circuit
 from ..computer import QubitComputer, Result
 from ..state import APQBReadout, StateVector, concurrence, three_tangle
@@ -113,20 +115,22 @@ class Process:
 
 class Kernel:
     def __init__(self, num_qubits: int = 16, fs_path: Optional[str] = None,
-                 seed: Optional[int] = None, theta: float = 0.2):
+                 seed: Optional[int] = None, theta: float = 0.2, backend: str = "cpu"):
         self.boot_time = time.time()
-        self.hw = QubitComputer(max_qubits=num_qubits)
+        self._dmesg: List[str] = []
+        self.backend_info: BackendInfo = backend_mod.resolve(backend, on_warning=self.log)
+        self.hw = QubitComputer(max_qubits=num_qubits, backend=self.backend_info.name)
         self.num_qubits = num_qubits
         self.fs = QubitFS(fs_path)
         self.rng = random.Random(seed)
         self.seed = seed
-        self._dmesg: List[str] = []
         self.sysctl: Dict[str, Any] = {
             "apqb.theta": theta,          # system APQB angle -> scheduler exploration
             "sched.p_min": 0.0,
             "sched.p_max": 0.5,
             "hw.num_qubits": num_qubits,
             "run.shots": 1024,
+            "hardware.backend": self.backend_info.name.value,   # cpu | gpu | qnpu (see backend.py)
         }
         self.free_qubits: List[int] = list(range(num_qubits))
         self.segments: Dict[int, Segment] = {}
@@ -142,8 +146,11 @@ class Kernel:
             "spawn": self.sys_spawn, "schedule": self.sys_schedule, "kill": self.sys_kill,
             "ps": self.sys_ps, "run": self.sys_run, "exec_circuit": self.sys_exec_circuit,
             "sysctl": self.sys_sysctl, "dmesg": self.sys_dmesg, "uname": self.sys_uname,
+            "backend": self.sys_backend,
         }
         self.log(f"{OS_NAME} {OS_VERSION} booting on APQB hardware: {num_qubits} physical qubits")
+        self.log(f"hardware backend: {self.backend_info.name.value} (engine={self.backend_info.engine}) "
+                 f"- {self.backend_info.detail}")
         self.log(f"system APQB theta={theta:.3f} -> r={math.cos(2 * theta):+.3f} "
                  f"eta={abs(math.sin(2 * theta)):.3f} (scheduler exploration eps={self.exploration_rate():.3f})")
         self.log(f"fs: {'persistent ' + fs_path if fs_path else 'in-memory'}; {len(self.programs)} programs in /bin")
@@ -159,8 +166,24 @@ class Kernel:
 
     def sys_uname(self) -> Dict[str, Any]:
         return {"os": OS_NAME, "version": OS_VERSION, "hardware": "APQB state-vector",
-                "num_qubits": self.num_qubits, "uptime": time.time() - self.boot_time,
-                "programs": sorted(self.programs)}
+                "backend": self.backend_info.name.value, "num_qubits": self.num_qubits,
+                "uptime": time.time() - self.boot_time, "programs": sorted(self.programs)}
+
+    # ------------------------------------------------------------ backend
+    def sys_backend(self, name: Optional[str] = None) -> Any:
+        """``backend`` (no arg): report; ``backend <cpu|gpu|qnpu>``: switch."""
+        if name is None:
+            return {
+                "current": self.backend_info.name.value,
+                "engine": self.backend_info.engine,
+                "detail": self.backend_info.detail,
+                "available": [
+                    {"name": info.name.value, "available": info.available,
+                     "engine": info.engine, "detail": info.detail}
+                    for info in backend_mod.available_backends()
+                ],
+            }
+        return self.sys_sysctl("hardware.backend", name)
 
     # ----------------------------------------------------------- syscalls
     def syscall(self, name: str, *args: Any, **kwargs: Any) -> Any:
@@ -190,6 +213,14 @@ class Kernel:
         if key == "apqb.r":  # pragma: no cover - convenience alias
             new = theta_from_r(float(value))
             key = "apqb.theta"
+        elif key == "hardware.backend":
+            info = backend_mod.resolve(value, on_warning=self.log)
+            self.backend_info = info
+            self.hw.set_backend(info.name)
+            new = info.name.value
+            self.sysctl[key] = new
+            self.log(f"sysctl {key}: {old} -> {new} (engine={info.engine})")
+            return new
         elif isinstance(old, bool):
             new = value.lower() in ("1", "true", "yes", "on")
         elif isinstance(old, int) and not isinstance(old, bool):
@@ -214,7 +245,7 @@ class Kernel:
             raise KernelError(f"out of qubits: requested {size}, free {len(self.free_qubits)}")
         qubits = self.free_qubits[:size]
         del self.free_qubits[:size]
-        state = StateVector.from_apqbs(list(apqbs)) if apqbs else StateVector(size)
+        state = self._new_statevector(size, apqbs)
         sid = self._next_sid
         self._next_sid += 1
         seg = Segment(sid, name or f"seg{sid}", qubits, state, owner)
@@ -240,6 +271,11 @@ class Kernel:
             return self.segments[int(sid)]
         except (KeyError, ValueError):
             raise KernelError(f"no such segment: {sid}") from None
+
+    def _new_statevector(self, size: int, apqbs: Optional[Sequence[APQB]] = None) -> StateVector:
+        sv = StateVector.from_apqbs(list(apqbs)) if apqbs else StateVector(size)
+        sv.backend = self.backend_info.name
+        return sv
 
     # --------------------------------------------------------- register ops
     def sys_apply(self, sid: int, gate: str, targets: Sequence[int], params: Sequence[float] = ()) -> Segment:
@@ -269,7 +305,7 @@ class Kernel:
 
     def sys_reset(self, sid: int, apqbs: Optional[Sequence[APQB]] = None) -> Segment:
         seg = self._segment(sid)
-        seg.state = StateVector.from_apqbs(list(apqbs)) if apqbs else StateVector(seg.size)
+        seg.state = self._new_statevector(seg.size, apqbs)
         seg.history.append("reset")
         return seg
 

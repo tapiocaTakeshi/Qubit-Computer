@@ -100,6 +100,37 @@ describe('Kernel', () => {
   });
 });
 
+describe('backend selection', () => {
+  test('defaults to cpu', () => {
+    const k = new Kernel({ numQubits: 4, seed: 0 });
+    expect(k.sysctl['hardware.backend']).toBe('cpu');
+    expect(k.sysUname().backend).toBe('cpu');
+  });
+  test('sysBackend() lists all three backends, cpu marked available', () => {
+    const k = new Kernel({ numQubits: 4, seed: 0 });
+    const info = k.sysBackend() as { current: string; available: Array<{ name: string; available: boolean }> };
+    expect(info.current).toBe('cpu');
+    const names = info.available.map((b) => b.name).sort();
+    expect(names).toEqual(['cpu', 'gpu', 'qnpu']);
+    expect(info.available.find((b) => b.name === 'cpu')?.available).toBe(true);
+  });
+  test('switching to an unavailable backend falls back to cpu and logs why', () => {
+    const k = new Kernel({ numQubits: 4, seed: 0 });
+    expect(k.sysBackend('gpu')).toBe('cpu');
+    expect(k.sysctl['hardware.backend']).toBe('cpu');
+    expect(k.sysDmesg().some((l) => l.includes("backend 'gpu' unavailable"))).toBe(true);
+  });
+  test('sysctl hardware.backend routes through the same fallback', () => {
+    const k = new Kernel({ numQubits: 4, seed: 0 });
+    expect(k.sysSysctl('hardware.backend', 'qnpu')).toBe('cpu');
+  });
+  test('shell backend command', () => {
+    const { text } = shell(['backend', 'backend qnpu']);
+    expect(text).toContain('current: cpu');
+    expect(text).toContain('backend = cpu');
+  });
+});
+
 describe('Shell', () => {
   test('tokenizer', () => {
     expect(tokenize('echo "a b" c')).toEqual(['echo', 'a b', 'c']);

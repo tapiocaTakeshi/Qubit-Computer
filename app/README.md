@@ -144,7 +144,7 @@ npm run dist:win      # Windows インストーラ（Windows 上で実行）
 | **App Store** | インターネット上のレジストリからアプリを検索・インストール（Get）、URL から直接インストール、任意の Web ページを Web アプリとして追加 |
 | **Browser** | アドレスバー付きブラウザ。「Add to Dock」でその URL を Web アプリとしてインストール |
 | **Activity Monitor** | プロセス表（GUI ウィンドウを含む）、Kill、APQB スケジューラの θ スライダー、Network（全リクエストの履歴・オンライン/オフライン切替）、dmesg |
-| **System Settings** | About、`apqb.theta` / `sched.p_max` / `run.shots` のスライダー、ネットワークの有効化とレジストリ URL、ファイルシステム初期化 |
+| **System Settings** | About、Hardware Backend（CPU / GPU / Q-NPU 選択）、`apqb.theta` / `sched.p_max` / `run.shots` のスライダー、ネットワークの有効化とレジストリ URL、ファイルシステム初期化 |
 
 ウィンドウは `gui:<app>` という名前のサービスプロセスとしてカーネルに登録されます。Terminal で `kill <pid>` するとウィンドウが閉じ、ウィンドウを閉じるとプロセスが killed になります。
 
