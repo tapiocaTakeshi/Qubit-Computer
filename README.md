@@ -216,7 +216,7 @@ Shell(kernel).execute_line("run teleport 0.7 --shots 1; ps")
 
 ## React Native アプリ（app/）
 
-同じ量子コンピュータと QubitOS を TypeScript に移植した **Expo / React Native アプリ**を `app/` に同梱しています。UI は QubitOS のデスクトップ環境（メニューバー・ドラッグ可能なウィンドウ・ドック）で、Terminal / Finder / Programs / Qubit Memory / APQB / QBNN Lab / Activity Monitor / System Settings をウィンドウとして開きます。各ウィンドウはカーネルのサービスプロセスとして `ps` / `kill` / `open` から扱え、仮想ファイルシステムは AsyncStorage に永続化されます。
+同じ量子コンピュータと QubitOS を TypeScript に移植した **Expo / React Native アプリ**を `app/` に同梱しています。UI は QubitOS のデスクトップ環境（メニューバー・ドラッグ可能なウィンドウ・ドック）で、Terminal / Finder / Programs / Qubit Memory / APQB / QBNN Lab / Activity Monitor / System Settings をウィンドウとして開きます。各ウィンドウはカーネルのサービスプロセスとして `ps` / `kill` / `open` から扱え、仮想ファイルシステムは AsyncStorage に永続化されます。ネットワークスタックとパッケージマネージャ `qpm` を備え、App Store からこのリポジトリの `registry/` や任意の URL のアプリ（QubitOS スクリプトパッケージ / Web アプリ）をインターネット経由でインストールできます。
 
 ```bash
 cd app && npm install

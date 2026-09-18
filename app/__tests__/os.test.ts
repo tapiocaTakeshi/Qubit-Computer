@@ -208,7 +208,8 @@ describe('network and qpm', () => {
     sh.executeLine('curl https://nowhere.test/');
     await sh.pending;
     expect(lines[lines.length - 1]).toContain('network error');
-    expect(k.net.history.length).toBe(3);
+    expect(k.net.history.length).toBe(5); // 2 ok + 1 failed request retried twice
+    expect(k.net.history.filter((r) => r.error).length).toBe(3);
     k.sysSysctl('net.enabled', 'false');
     sh.executeLine('curl https://example.test/hello');
     await sh.pending;

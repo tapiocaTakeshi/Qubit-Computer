@@ -114,7 +114,7 @@ export class Kernel {
     this.fs = new QubitFS(opts.fsSnapshot);
     this.rng = new Rng(opts.seed);
     this.seed = opts.seed;
-    this.sysctl = { 'apqb.theta': theta, 'sched.p_min': 0, 'sched.p_max': 0.5, 'hw.num_qubits': numQubits, 'run.shots': 1024, 'net.enabled': true, 'net.timeout_ms': 15000, 'net.registry': DEFAULT_REGISTRIES.join(',') };
+    this.sysctl = { 'apqb.theta': theta, 'sched.p_min': 0, 'sched.p_max': 0.5, 'hw.num_qubits': numQubits, 'run.shots': 1024, 'net.enabled': true, 'net.timeout_ms': 15000, 'net.retries': 2, 'net.registry': DEFAULT_REGISTRIES.join(',') };
     this.freeQubits = [...Array(numQubits).keys()];
     this.log(`${OS_NAME} ${OS_VERSION} booting on APQB hardware: ${numQubits} physical qubits`);
     this.log(`system APQB theta=${theta.toFixed(3)} -> r=${Math.cos(2 * theta) >= 0 ? '+' : ''}${Math.cos(2 * theta).toFixed(3)} eta=${Math.abs(Math.sin(2 * theta)).toFixed(3)} (scheduler exploration eps=${this.explorationRate().toFixed(3)})`);

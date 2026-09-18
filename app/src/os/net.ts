@@ -45,9 +45,26 @@ export class NetStack {
     this.kernel.notify();
   }
 
+  /** GET/HEAD with a couple of retries on transport errors (flaky mobile links, proxies). */
   async request(url: string, opts: FetchOptions = {}): Promise<{ status: number; text: string; headers: Record<string, string> }> {
     if (!this.enabled) throw new KernelError('network is disabled (sysctl net.enabled false)');
     if (!/^https?:\/\//i.test(url)) throw new KernelError(`unsupported URL: ${url}`);
+    const retries = Math.max(0, Number(this.kernel.sysctl['net.retries'] ?? 2));
+    let last: unknown;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await this.requestOnce(url, opts);
+      } catch (e) {
+        last = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!/network error/.test(msg) || attempt === retries) throw e;
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+      }
+    }
+    throw last;
+  }
+
+  private async requestOnce(url: string, opts: FetchOptions): Promise<{ status: number; text: string; headers: Record<string, string> }> {
     const rec: NetRecord = { id: this.nextId++, method: opts.method ?? 'GET', url, status: null, bytes: 0, ms: 0, at: Date.now() };
     const t0 = Date.now();
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
