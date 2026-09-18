@@ -4,7 +4,10 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { APP_ORDER, APPS, AppId, OSWindow, WindowManager } from '../os/wm';
+import { APPS, AppId, BuiltinAppId, OSWindow, WindowManager, isBuiltinApp } from '../os/wm';
+import { BrowserApp } from './BrowserApp';
+import { ScriptApp } from './ScriptApp';
+import { StoreApp } from './StoreApp';
 import { ActivityApp } from './ActivityApp';
 import { APQBScreen } from './APQBScreen';
 import { FinderApp } from './FinderApp';
@@ -38,7 +41,16 @@ function AppContent({ win, wm }: { win: OSWindow; wm: WindowManager }) {
     case 'activity': return <ActivityApp />;
     case 'settings': return <SettingsApp />;
     case 'qbnn': return <QBNNApp />;
-    default: return null;
+    case 'store': return <StoreApp onOpen={(app) => wm.open(app as AppId)} />;
+    case 'browser': return <BrowserApp url={win.arg} onTitle={(t) => { if (t) wm.setTitle(win.id, t); }} />;
+    default: {
+      if (win.app.startsWith('app:')) {
+        const pkg = wm.kernel.pkg.get(win.app.slice(4));
+        if (pkg?.kind === 'web') return <BrowserApp url={pkg.url} onTitle={(t) => { if (t) wm.setTitle(win.id, t); }} />;
+        return <ScriptApp name={win.app.slice(4)} />;
+      }
+      return null;
+    }
   }
 }
 
@@ -111,7 +123,7 @@ export function Desktop() {
   const [area, setArea] = useState({ w: 0, h: 0 });
   const [booted, setBooted] = useState(false);
   const focused = wm.focused;
-  const activeTitle = focused ? APPS[focused.app].title : 'Finder';
+  const activeTitle = focused ? wm.appInfo(focused.app)?.title ?? focused.title : 'Finder';
   const mem = kernel.sysMem();
   const narrow = useWindowDimensions().width < 600;
 
@@ -131,6 +143,7 @@ export function Desktop() {
             <Pressable onPress={() => wm.open('finder')}><Text style={styles.menuText}>File</Text></Pressable>
             <Pressable onPress={() => { if (focused) wm.close(focused.id); }}><Text style={styles.menuText}>Close</Text></Pressable>
             <Pressable onPress={() => wm.open('terminal', undefined, true)}><Text style={styles.menuText}>New Terminal</Text></Pressable>
+            <Pressable onPress={() => wm.open('store')}><Text style={styles.menuText}>App Store</Text></Pressable>
           </>
         ) : (
           <Pressable onPress={() => { if (focused) wm.close(focused.id); }}><Text style={styles.menuText}>Close</Text></Pressable>
@@ -138,6 +151,7 @@ export function Desktop() {
         <View style={{ flex: 1 }} />
         {!narrow ? <Text style={styles.menuStat}>{`${mem.free}/${mem.total} q free`}</Text> : null}
         <Text style={styles.menuStat}>{`η ${kernel.systemAPQB().T.toFixed(2)}`}</Text>
+        <Text style={[styles.menuStat, { color: kernel.net.enabled ? colors.ok : colors.dim }]}>{kernel.net.enabled ? '⌾ online' : '⌾ offline'}</Text>
         <Clock compact={narrow} />
       </View>
       <View
@@ -158,13 +172,14 @@ export function Desktop() {
         )) : null}
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dock} contentContainerStyle={styles.dockContent}>
-        {APP_ORDER.map((id) => {
-          const info = APPS[id];
+        {wm.dockApps().map((info) => {
+          const id = info.id;
           const open = wm.byApp(id);
+          const builtin = isBuiltinApp(id);
           return (
             <Pressable key={id} onPress={() => wm.open(id)} onLongPress={() => wm.closeApp(id)} style={({ pressed }) => [styles.dockItem, pressed && { transform: [{ scale: 1.12 }] }]}>
-              <View style={[styles.dockIcon, { backgroundColor: DOCK_COLORS[id] }]}>
-                <Text style={[styles.dockGlyph, id === 'terminal' && { fontFamily: mono }]}>{info.icon}</Text>
+              <View style={[styles.dockIcon, { backgroundColor: builtin ? DOCK_COLORS[id as BuiltinAppId] : '#ffffff' }, !builtin && styles.dockIconApp]}>
+                <Text style={[styles.dockGlyph, id === 'terminal' && { fontFamily: mono }, !builtin && { fontSize: 20 }]}>{info.icon}</Text>
               </View>
               <Text style={styles.dockLabel} numberOfLines={1}>{info.title}</Text>
               <View style={[styles.dockDot, { opacity: open.length ? 1 : 0 }]} />
@@ -177,8 +192,8 @@ export function Desktop() {
   );
 }
 
-const DOCK_COLORS: Record<AppId, string> = {
-  terminal: '#2c2c2e', finder: '#3d8bff', programs: '#34c759', memory: '#5856d6', apqb: '#ff9500', qbnn: '#af52de', activity: '#1c1c1e', settings: '#8e8e93',
+const DOCK_COLORS: Record<BuiltinAppId, string> = {
+  terminal: '#2c2c2e', finder: '#3d8bff', programs: '#34c759', memory: '#5856d6', apqb: '#ff9500', qbnn: '#af52de', activity: '#1c1c1e', settings: '#8e8e93', store: '#0a84ff', browser: '#32ade6',
 };
 
 const styles = StyleSheet.create({
@@ -205,6 +220,7 @@ const styles = StyleSheet.create({
   dockContent: { flexGrow: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start', gap: 4, paddingTop: 6, paddingHorizontal: 8 },
   dockItem: { alignItems: 'center', width: 50 },
   dockIcon: { width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+  dockIconApp: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.2)' },
   dockGlyph: { color: '#fff', fontSize: 16, fontWeight: '700', fontFamily: sans },
   dockLabel: { fontFamily: sans, fontSize: 9, color: colors.text, marginTop: 2 },
   dockDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.text, marginTop: 1 },

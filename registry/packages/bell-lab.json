@@ -1,0 +1,14 @@
+{
+  "name": "bell-lab",
+  "version": "1.0.0",
+  "title": "Bell Lab",
+  "icon": "🔔",
+  "kind": "script",
+  "description": "Sweep θ over the |Ψ2(θ)> family and check concurrence C2 = η (paper Eq. 13-14).",
+  "homepage": "https://github.com/tapiocaTakeshi/Qubit-Computer",
+  "main": "/apps/bell-lab/main.qsh",
+  "files": {
+    "/apps/bell-lab/main.qsh": "# Bell Lab: C2 = eta along the |Psi2(theta)> family\necho == Bell Lab ==\nrun bell_apqb 0.1 --shots 256 --seed 1\nent last\nrun bell_apqb 0.4 --shots 256 --seed 1\nent last\nrun bell_apqb 0.25pi --shots 256 --seed 1\nent last\necho done: C2^2 + r^2 = 1 at every theta\n",
+    "/apps/bell-lab/README.txt": "Bell Lab runs bell_apqb at three angles and prints the concurrence of each state.\n"
+  }
+}

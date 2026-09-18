@@ -1,0 +1,12 @@
+{
+  "name": "grover-demo",
+  "version": "1.0.0",
+  "title": "Grover Demo",
+  "icon": "🔎",
+  "kind": "script",
+  "description": "Grover search on 3 and 4 qubits, drawn and executed on the APQB hardware.",
+  "main": "/apps/grover-demo/main.qsh",
+  "files": {
+    "/apps/grover-demo/main.qsh": "echo == Grover search ==\ndraw grover 101\nrun grover 101 --shots 256 --seed 0\nrun grover 1011 --shots 256 --seed 0\n"
+  }
+}

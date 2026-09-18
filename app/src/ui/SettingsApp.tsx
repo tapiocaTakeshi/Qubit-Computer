@@ -1,7 +1,8 @@
 import Slider from '@react-native-community/slider';
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { Body, Button, Card, Divider, KV, Label, Row } from './components';
+import { Body, Button, Card, Divider, Field, KV, Label, Row } from './components';
+import { useState } from 'react';
 import { useKernel } from './KernelContext';
 import { colors, spacing } from './theme';
 
@@ -13,6 +14,7 @@ export function SettingsApp() {
   const sys = kernel.systemAPQB();
   const pmax = Number(kernel.sysctl['sched.p_max']);
   const shots = Number(kernel.sysctl['run.shots']);
+  const [registry, setRegistry] = useState(String(kernel.sysctl['net.registry']));
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.md }}>
       <Card title="About This Computer">
@@ -33,6 +35,19 @@ export function SettingsApp() {
         <Divider />
         <Label>run.shots = {shots}</Label>
         <Slider minimumValue={16} maximumValue={4096} step={16} value={shots} onSlidingComplete={(v) => kernel.sysSysctl('run.shots', String(Math.round(v)))} minimumTrackTintColor={colors.accent} maximumTrackTintColor={colors.fill} thumbTintColor="#fff" />
+      </Card>
+      <Card title="Network">
+        <KV k="status" v={kernel.net.enabled ? 'online' : 'offline'} color={kernel.net.enabled ? colors.ok : colors.dim} />
+        <KV k="requests" v={String(kernel.net.history.length)} />
+        <KV k="installed apps" v={String(kernel.pkg.list().length)} />
+        <Row style={{ marginTop: spacing.sm }}>
+          <Button title={kernel.net.enabled ? 'Disable Network' : 'Enable Network'} small kind="ghost" onPress={() => kernel.sysSysctl('net.enabled', kernel.net.enabled ? 'false' : 'true')} />
+        </Row>
+        <Label>package registries (comma separated, tried in order)</Label>
+        <Field value={registry} onChangeText={setRegistry} multiline />
+        <Row>
+          <Button title="Save" small onPress={() => kernel.sysSysctl('net.registry', registry)} />
+        </Row>
       </Card>
       <Card title="Storage">
         <Body color={colors.dim} style={{ fontSize: 12 }}>QubitFS is saved to this device automatically. Resetting restores the factory filesystem and reboots the kernel.</Body>

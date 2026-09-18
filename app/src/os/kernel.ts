@@ -8,15 +8,18 @@ import { Circuit } from '../core/circuit';
 import { QubitComputer, Result } from '../core/computer';
 import * as G from '../core/gates';
 import { Rng } from '../core/rng';
-import { APQBReadout, StateVector, concurrence, threeTangle } from '../core/state';
+import { APQBReadout, StateVector } from '../core/state';
 import { FSDir, FSError, QubitFS } from './fs';
+import { NetStack } from './net';
+import { DEFAULT_REGISTRIES, PackageManager } from './pkg';
 import { PROGRAMS, Program, programKind } from './programs';
+import { KernelError, entanglementOf, isResult } from './util';
 import type { WindowManager } from './wm';
+
+export { KernelError, isResult, entanglementOf };
 
 export const OS_NAME = 'QubitOS';
 export const OS_VERSION = '0.1.0';
-
-export class KernelError extends Error {}
 
 export type ProcState = 'new' | 'ready' | 'running' | 'done' | 'failed' | 'killed';
 
@@ -71,8 +74,6 @@ export class Process {
   }
 }
 
-export const isResult = (v: unknown): v is Result => !!v && typeof v === 'object' && 'counts' in (v as object) && 'apqb' in (v as object);
-
 export interface KernelOptions {
   numQubits?: number;
   seed?: number;
@@ -102,6 +103,8 @@ export class Kernel {
   listeners = new Set<() => void>();
   /** Attached by the desktop's WindowManager, if a GUI is running. */
   wm: WindowManager | null = null;
+  net: NetStack;
+  pkg: PackageManager;
 
   constructor(opts: KernelOptions = {}) {
     const numQubits = opts.numQubits ?? 16;
@@ -111,12 +114,15 @@ export class Kernel {
     this.fs = new QubitFS(opts.fsSnapshot);
     this.rng = new Rng(opts.seed);
     this.seed = opts.seed;
-    this.sysctl = { 'apqb.theta': theta, 'sched.p_min': 0, 'sched.p_max': 0.5, 'hw.num_qubits': numQubits, 'run.shots': 1024 };
+    this.sysctl = { 'apqb.theta': theta, 'sched.p_min': 0, 'sched.p_max': 0.5, 'hw.num_qubits': numQubits, 'run.shots': 1024, 'net.enabled': true, 'net.timeout_ms': 15000, 'net.registry': DEFAULT_REGISTRIES.join(',') };
     this.freeQubits = [...Array(numQubits).keys()];
     this.log(`${OS_NAME} ${OS_VERSION} booting on APQB hardware: ${numQubits} physical qubits`);
     this.log(`system APQB theta=${theta.toFixed(3)} -> r=${Math.cos(2 * theta) >= 0 ? '+' : ''}${Math.cos(2 * theta).toFixed(3)} eta=${Math.abs(Math.sin(2 * theta)).toFixed(3)} (scheduler exploration eps=${this.explorationRate().toFixed(3)})`);
     this.log(`fs: ${opts.fsSnapshot ? 'restored snapshot' : 'fresh'}; ${Object.keys(this.programs).length} programs in /bin`);
     this.refreshBin();
+    this.net = new NetStack(this);
+    this.pkg = new PackageManager(this);
+    this.log(`net: ${this.net.enabled ? 'online' : 'offline'}; qpm: ${Object.keys(this.pkg.installed).length} installed app(s)`);
   }
 
   // ------------------------------------------------------------ events
@@ -255,19 +261,7 @@ export class Kernel {
   }
 
   static entanglementOf(sv: StateVector) {
-    const readouts = sv.apqbReadouts();
-    const info: { numQubits: number; vonNeumann: number[]; r: number[]; concurrence?: number; c2Check?: number; threeTangle?: number; tau3Check?: number } = {
-      numQubits: sv.n, vonNeumann: readouts.map((r) => r.vonNeumann), r: readouts.map((r) => r.r),
-    };
-    if (sv.n === 2) {
-      info.concurrence = concurrence(sv);
-      info.c2Check = info.concurrence ** 2 + readouts[0].r ** 2;
-    }
-    if (sv.n === 3) {
-      info.threeTangle = threeTangle(sv);
-      info.tau3Check = info.threeTangle + readouts[0].r ** 2;
-    }
-    return info;
+    return entanglementOf(sv);
   }
 
   // ---------------------------------------------------------- processes

@@ -7,7 +7,9 @@
  */
 import { Kernel, Process } from './kernel';
 
-export type AppId = 'terminal' | 'finder' | 'programs' | 'memory' | 'apqb' | 'activity' | 'settings' | 'qbnn';
+export type BuiltinAppId = 'terminal' | 'finder' | 'programs' | 'memory' | 'apqb' | 'activity' | 'settings' | 'qbnn' | 'store' | 'browser';
+/** Built-in app id, or `app:<name>` for an installed package. */
+export type AppId = BuiltinAppId | `app:${string}`;
 
 export interface AppInfo {
   id: AppId;
@@ -17,7 +19,7 @@ export interface AppInfo {
   defaultSize: { w: number; h: number };
 }
 
-export const APPS: Record<AppId, AppInfo> = {
+export const APPS: Record<BuiltinAppId, AppInfo> = {
   terminal: { id: 'terminal', title: 'Terminal', icon: '>_', description: 'qsh shell', defaultSize: { w: 560, h: 520 } },
   finder: { id: 'finder', title: 'Finder', icon: '🗂', description: 'QubitFS browser', defaultSize: { w: 520, h: 480 } },
   programs: { id: 'programs', title: 'Programs', icon: '▶', description: 'Run circuits and jobs', defaultSize: { w: 560, h: 620 } },
@@ -26,9 +28,13 @@ export const APPS: Record<AppId, AppInfo> = {
   activity: { id: 'activity', title: 'Activity Monitor', icon: '◔', description: 'Processes, scheduler, kernel log', defaultSize: { w: 560, h: 520 } },
   settings: { id: 'settings', title: 'System Settings', icon: '⚙', description: 'sysctl and about', defaultSize: { w: 480, h: 520 } },
   qbnn: { id: 'qbnn', title: 'QBNN Lab', icon: '∿', description: 'Train QBNN layers', defaultSize: { w: 520, h: 600 } },
+  store: { id: 'store', title: 'App Store', icon: 'A', description: 'Install apps from the internet', defaultSize: { w: 560, h: 620 } },
+  browser: { id: 'browser', title: 'Browser', icon: '◎', description: 'Open web pages and web apps', defaultSize: { w: 720, h: 600 } },
 };
 
-export const APP_ORDER: AppId[] = ['terminal', 'finder', 'programs', 'memory', 'apqb', 'qbnn', 'activity', 'settings'];
+export const APP_ORDER: BuiltinAppId[] = ['finder', 'terminal', 'browser', 'store', 'programs', 'memory', 'apqb', 'qbnn', 'activity', 'settings'];
+
+export const isBuiltinApp = (id: string): id is BuiltinAppId => id in APPS;
 
 export interface OSWindow {
   id: number;
@@ -99,9 +105,24 @@ export class WindowManager {
     return this.windows.filter((w) => w.app === app);
   }
 
+  /** App metadata for built-ins and installed packages. */
+  appInfo(app: string): AppInfo | null {
+    if (isBuiltinApp(app)) return APPS[app];
+    if (app.startsWith('app:')) {
+      const pkg = this.kernel.pkg.get(app.slice(4));
+      if (pkg) return { id: app as AppId, title: pkg.title, icon: pkg.icon ?? (pkg.kind === 'web' ? '🌐' : '▶'), description: pkg.description ?? '', defaultSize: pkg.kind === 'web' ? { w: 720, h: 600 } : { w: 520, h: 480 } };
+    }
+    return null;
+  }
+
+  /** All apps that belong in the dock: built-ins followed by installed packages. */
+  dockApps(): AppInfo[] {
+    return [...APP_ORDER.map((id) => APPS[id]), ...this.kernel.pkg.list().map((p) => this.appInfo(`app:${p.name}`)!).filter(Boolean)];
+  }
+
   /** Open a window (spawning a GUI service process); reuses an existing one unless `fresh`. */
   open(app: AppId, arg?: string, fresh = false): OSWindow {
-    const info = APPS[app];
+    const info = this.appInfo(app);
     if (!info) throw new Error(`unknown app: ${app}`);
     if (!fresh) {
       const existing = this.byApp(app)[0];

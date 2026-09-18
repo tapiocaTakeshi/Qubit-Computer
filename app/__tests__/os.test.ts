@@ -175,3 +175,83 @@ describe('WindowManager', () => {
     expect(lines.join('\n')).toContain('concurrence');
   });
 });
+
+describe('network and qpm', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const registryDir = path.join(__dirname, '..', '..', 'registry');
+  const base = 'https://example.test/registry/';
+  function mockFetch(k: Kernel) {
+    k.net.fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith(base)) {
+        const file = path.join(registryDir, url.slice(base.length));
+        if (fs.existsSync(file)) return new Response(fs.readFileSync(file, 'utf8'), { status: 200 });
+        return new Response('not found', { status: 404 });
+      }
+      if (url === 'https://example.test/hello') return new Response('hello, qubit', { status: 200 });
+      throw new Error('ENOTFOUND');
+    }) as typeof fetch;
+    k.sysctl['net.registry'] = base + 'index.json';
+  }
+  test('curl / wget through the shell', async () => {
+    const lines: string[] = [];
+    const k = new Kernel({ numQubits: 4, seed: 0 });
+    mockFetch(k);
+    const sh = new Shell(k, (l) => lines.push(l));
+    sh.executeLine('curl https://example.test/hello');
+    await sh.pending;
+    expect(lines.join('\n')).toContain('hello, qubit');
+    sh.executeLine('wget https://example.test/hello /home/user/h.txt');
+    await sh.pending;
+    expect(k.fs.read('/home/user/h.txt')).toBe('hello, qubit');
+    sh.executeLine('curl https://nowhere.test/');
+    await sh.pending;
+    expect(lines[lines.length - 1]).toContain('network error');
+    expect(k.net.history.length).toBe(3);
+    k.sysSysctl('net.enabled', 'false');
+    sh.executeLine('curl https://example.test/hello');
+    await sh.pending;
+    expect(lines[lines.length - 1]).toContain('disabled');
+  });
+  test('qpm install from the repo registry, run, open, remove', async () => {
+    const lines: string[] = [];
+    const k = new Kernel({ numQubits: 6, seed: 0 });
+    mockFetch(k);
+    const { WindowManager } = require('../src/os/wm');
+    const wm = new WindowManager(k);
+    const sh = new Shell(k, (l) => lines.push(l));
+    sh.executeLine('qpm update; qpm search lab');
+    await sh.pending;
+    expect(lines.join('\n')).toContain('bell-lab');
+    sh.executeLine('qpm install bell-lab qubit-ai');
+    await sh.pending;
+    expect(k.fs.exists('/apps/bell-lab/main.qsh')).toBe(true);
+    expect(k.pkg.get('qubit-ai')!.kind).toBe('web');
+    expect('app:bell-lab' in k.programs).toBe(true);
+    const proc = k.sysRun('app:bell-lab');
+    expect(proc.state).toBe('done');
+    expect(proc.logs.join('\n')).toContain('concurrence');
+    sh.executeLine('open bell-lab; open qubit-ai; windows');
+    expect(wm.windows.map((w: { app: string }) => w.app).sort()).toEqual(['app:bell-lab', 'app:qubit-ai']);
+    // persisted in /etc/apps.json and reloaded on reboot
+    const k2 = new Kernel({ numQubits: 6, seed: 0, fsSnapshot: JSON.parse(k.fs.snapshot()) });
+    expect(k2.pkg.list().map((a) => a.name).sort()).toEqual(['bell-lab', 'qubit-ai']);
+    expect('app:bell-lab' in k2.programs).toBe(true);
+    sh.executeLine('qpm remove bell-lab; qpm list');
+    expect(k.pkg.get('bell-lab')).toBeUndefined();
+    expect(k.fs.exists('/apps/bell-lab')).toBe(false);
+    expect(wm.windows.length).toBe(1);
+    sh.executeLine('qpm install nope');
+    await sh.pending;
+    expect(lines[lines.length - 1]).toContain('not found');
+  });
+  test('manifest validation rejects unsafe packages', () => {
+    const k = new Kernel({ numQubits: 4, seed: 0 });
+    expect(() => k.pkg.installManifest({ name: 'evil', version: '1', title: 'x', kind: 'script', main: '/etc/motd', files: { '/etc/motd': 'pwned' } })).toThrow(/\/apps\//);
+    expect(() => k.pkg.installManifest({ name: 'Bad Name', version: '1', title: 'x', kind: 'web', url: 'https://a' })).toThrow(/invalid package name/);
+    expect(() => k.pkg.installManifest({ name: 'w', version: '1', title: 'x', kind: 'web', url: 'ftp://a' })).toThrow(/http/);
+    const app = k.pkg.addWebApp('My Site!', 'https://example.test');
+    expect(app.name).toBe('my-site');
+  });
+});

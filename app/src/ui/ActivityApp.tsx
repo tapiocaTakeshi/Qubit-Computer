@@ -8,7 +8,7 @@ import { colors, spacing } from './theme';
 /** Activity Monitor: process table, APQB scheduler, kernel log. */
 export function ActivityApp() {
   const { kernel } = useKernel();
-  const [tab, setTab] = useState<'proc' | 'log'>('proc');
+  const [tab, setTab] = useState<'proc' | 'net' | 'log'>('proc');
   const procs = [...kernel.processes.values()].reverse();
   const theta = Number(kernel.sysctl['apqb.theta']);
   const sys = kernel.systemAPQB();
@@ -22,6 +22,7 @@ export function ActivityApp() {
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.md }}>
       <Row style={{ marginBottom: spacing.md }}>
         <Chip title="Processes" active={tab === 'proc'} onPress={() => setTab('proc')} />
+        <Chip title="Network" active={tab === 'net'} onPress={() => setTab('net')} />
         <Chip title="Kernel Log" active={tab === 'log'} onPress={() => setTab('log')} />
       </Row>
       {tab === 'proc' ? (
@@ -46,6 +47,16 @@ export function ActivityApp() {
             )) : <Body color={colors.dim}>No processes yet. Open an app, run a program or spawn the demo jobs.</Body>}
           </Card>
         </>
+      ) : tab === 'net' ? (
+        <Card title={`Network (${kernel.net.enabled ? 'online' : 'offline'})`}>
+          <Body color={colors.dim} style={{ fontSize: 12 }}>Every request made by the kernel's network stack (curl, wget, qpm, App Store).</Body>
+          <Row style={{ marginVertical: spacing.sm }}>
+            <Button title={kernel.net.enabled ? 'Go Offline' : 'Go Online'} small kind="ghost" onPress={() => kernel.sysSysctl('net.enabled', kernel.net.enabled ? 'false' : 'true')} />
+          </Row>
+          {kernel.net.history.length ? [...kernel.net.history].reverse().map((r) => (
+            <Mono key={r.id} style={{ fontSize: 11 }} color={r.error ? colors.danger : colors.text}>{`${r.method} ${r.url}\n    ${r.error ? r.error : `${r.status} · ${r.bytes} B · ${r.ms} ms`}`}</Mono>
+          )) : <Body color={colors.dim}>No requests yet.</Body>}
+        </Card>
       ) : (
         <Card title="dmesg">
           {kernel.sysDmesg(80).map((l, i) => (

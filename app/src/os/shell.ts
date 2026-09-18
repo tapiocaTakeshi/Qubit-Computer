@@ -4,9 +4,10 @@ import { Circuit, CircuitJSON } from '../core/circuit';
 import { Result, resultSummary } from '../core/computer';
 import { APQBReadout } from '../core/state';
 import { FSError } from './fs';
-import { isResult, Kernel, KernelError, Process } from './kernel';
+import type { Kernel, Process } from './kernel';
+import { entanglementOf, isResult, KernelError } from './util';
 import { num, parseArgs, ParsedArgs } from './programs';
-import { APP_ORDER, APPS, AppId } from './wm';
+import { APP_ORDER, AppId, isBuiltinApp } from './wm';
 
 export type Out = (line: string) => void;
 
@@ -61,13 +62,16 @@ export const HELP_GROUPS: Array<[string, string]> = [
   ['registers', 'gate <sid> <gate> <q..> [--p a,b] | measure <sid> [q..] [--shots N] | readout <sid> | state <sid> | ent <sid|last|pid>'],
   ['apqb', 'apqb <theta> | apqb --r <r> | apqb --a <latent> | apqb --p1 <prob>  [--K k]'],
   ['files', 'ls cat cd pwd mkdir rm write <path> <text> tree save <pid|last> <path> exec <circuit.json> sh <script.qsh>'],
-  ['desktop', 'open <app|path> | windows | close <window id|app>   apps: ' + APP_ORDER.join(' ')],
+  ['desktop', 'open <app|path|url> | windows | close <window id|app>   apps: ' + APP_ORDER.join(' ')],
+  ['network', 'curl <url> | wget <url> <path> | qpm update | qpm search [q] | qpm install <name|url> | qpm remove <name> | qpm list'],
 ];
 
 export class Shell {
   k: Kernel;
   out: Out;
   lastStatus = 0;
+  /** Promise of the most recent asynchronous command (curl, wget, qpm, open <url>). */
+  pending: Promise<void> = Promise.resolve();
   onClear: (() => void) | null = null;
   commands: Record<string, (args: string[]) => void>;
 
@@ -88,7 +92,9 @@ export class Shell {
       mkdir: (a) => a.forEach((p) => this.k.fs.mkdir(p)), rm: (a) => this.cmdRm(a), write: (a) => this.cmdWrite(a), tree: (a) => this.cmdTree(a),
       save: (a) => this.cmdSave(a), sh: (a) => this.cmdSh(a),
       open: (a) => this.cmdOpen(a), windows: () => this.cmdWindows(), close: (a) => this.cmdClose(a),
+      curl: (a) => this.cmdCurl(a), wget: (a) => this.cmdWget(a), qpm: (a) => this.cmdQpm(a),
     };
+    if (!kernel.pkg.runScript) kernel.pkg.runScript = (k, text, out) => new Shell(k, out).runScript(text);
   }
 
   prompt(): string {
@@ -356,7 +362,7 @@ export class Shell {
     const token = a[0] ?? 'last';
     let info;
     if (/^\d+$/.test(token) && this.k.segments.has(Number(token))) info = this.k.sysEntanglement(Number(token));
-    else info = Kernel.entanglementOf(this.resultOf(token).state);
+    else info = entanglementOf(this.resultOf(token).state);
     this.out(`  num_qubits: ${info.numQubits}`);
     this.out(`  von_neumann: ${info.vonNeumann.map((v) => v.toFixed(4)).join(', ')}`);
     this.out(`  r: ${info.r.map((v) => (v >= 0 ? '+' : '') + v.toFixed(4)).join(', ')}`);
@@ -449,8 +455,18 @@ export class Shell {
     if (!wm) throw new KernelError('no window manager (desktop not running)');
     if (!a.length) throw new Error('usage: open <app> | open <path>');
     const target = a[0];
-    if (target in APPS) {
+    if (/^https?:\/\//i.test(target)) {
+      const win = wm.open('browser', target, true);
+      this.out(`opened ${target} in Browser (window ${win.id})`);
+      return;
+    }
+    if (isBuiltinApp(target) || (target.startsWith('app:') && this.k.pkg.get(target.slice(4)))) {
       const win = wm.open(target as AppId, a[1]);
+      this.out(`opened ${win.title} (window ${win.id}, pid ${win.pid})`);
+      return;
+    }
+    if (this.k.pkg.get(target)) {
+      const win = wm.open(`app:${target}`);
       this.out(`opened ${win.title} (window ${win.id}, pid ${win.pid})`);
       return;
     }
@@ -485,7 +501,7 @@ export class Shell {
     const wm = this.k.wm;
     if (!wm) throw new KernelError('no window manager (desktop not running)');
     if (!a.length) throw new Error('usage: close <window id|app>');
-    if (a[0] in APPS) {
+    if (isBuiltinApp(a[0]) || a[0].startsWith('app:')) {
       wm.closeApp(a[0] as AppId);
       this.out(`closed ${a[0]}`);
       return;
@@ -494,6 +510,95 @@ export class Shell {
     if (!wm.find(id)) throw new KernelError(`no such window: ${id}`);
     wm.close(id);
     this.out(`closed window ${id}`);
+  }
+
+  // ---------------------------------------------------------- network
+  private async<T>(fn: () => Promise<T>): void {
+    this.pending = fn()
+      .then(() => undefined)
+      .catch((e: unknown) => {
+        this.out(`qsh: ${(e as Error).message}`);
+        this.lastStatus = 1;
+      })
+      .finally(() => this.k.notify());
+  }
+
+  private cmdCurl(a: string[]): void {
+    const parsed = parseArgs(a);
+    if (!parsed.pos.length) throw new Error('usage: curl <url> [--head] [--max N]');
+    const url = parsed.pos[0];
+    const max = parsed.opts.max !== undefined ? Math.round(num(parsed.opts.max)) : 4000;
+    this.async(async () => {
+      const res = await this.k.net.request(url, { method: parsed.opts.head ? 'HEAD' : 'GET' });
+      this.out(`HTTP ${res.status}  ${res.text.length} bytes`);
+      if (!parsed.opts.head) this.out(res.text.length > max ? res.text.slice(0, max) + `\n… (${res.text.length - max} more bytes, use --max)` : res.text);
+    });
+  }
+
+  private cmdWget(a: string[]): void {
+    if (a.length < 1) throw new Error('usage: wget <url> [path]');
+    const url = a[0];
+    const path = a[1] ?? `/home/user/${url.split('/').filter(Boolean).pop() || 'index.html'}`;
+    this.async(async () => {
+      const text = await this.k.net.fetchText(url);
+      this.k.fs.write(path, text);
+      this.out(`saved ${text.length} bytes to ${path}`);
+    });
+  }
+
+  private cmdQpm(a: string[]): void {
+    const [sub, ...rest] = a;
+    const pkg = this.k.pkg;
+    switch (sub) {
+      case 'list': {
+        const apps = pkg.list();
+        if (!apps.length) this.out('no apps installed (try: qpm search)');
+        for (const app of apps) this.out(`${app.name.padEnd(18)} ${app.version.padEnd(8)} ${app.kind.padEnd(6)} ${app.title}${app.kind === 'web' ? `  ${app.url}` : ''}`);
+        return;
+      }
+      case 'update':
+        this.async(async () => {
+          const idx = await pkg.refreshIndex();
+          this.out(`registry: ${pkg.indexSource}`);
+          this.out(`${idx.length} package(s) available`);
+        });
+        return;
+      case 'search':
+        this.async(async () => {
+          if (!pkg.index.length) await pkg.refreshIndex();
+          const hits = pkg.search(rest.join(' '));
+          if (!hits.length) this.out('no matches');
+          for (const p of hits) this.out(`${p.name.padEnd(18)} ${p.version.padEnd(8)} ${p.kind.padEnd(6)} ${p.title}${p.description ? ' — ' + p.description : ''}${pkg.get(p.name) ? '  [installed]' : ''}`);
+        });
+        return;
+      case 'install':
+        if (!rest.length) throw new Error('usage: qpm install <name|url>');
+        this.async(async () => {
+          for (const target of rest) {
+            const app = await pkg.install(target);
+            this.out(`installed ${app.name}@${app.version} (${app.kind}): ${app.title}`);
+            if (app.kind === 'script') this.out(`  run it with 'run app:${app.name}' or 'open ${app.name}'`);
+            else this.out(`  open it with 'open ${app.name}'`);
+          }
+        });
+        return;
+      case 'remove':
+      case 'uninstall':
+        if (!rest.length) throw new Error('usage: qpm remove <name>');
+        for (const name of rest) {
+          pkg.remove(name);
+          this.out(`removed ${name}`);
+        }
+        return;
+      case 'info': {
+        const app = pkg.get(rest[0] ?? '');
+        if (!app) throw new KernelError(`not installed: ${rest[0]}`);
+        this.out(JSON.stringify({ ...app, files: app.files ? Object.keys(app.files) : undefined }, null, 2));
+        return;
+      }
+      default:
+        throw new Error('usage: qpm update | search [q] | install <name|url> | remove <name> | list | info <name>');
+    }
   }
 
   private cmdSh(a: string[]): void {
