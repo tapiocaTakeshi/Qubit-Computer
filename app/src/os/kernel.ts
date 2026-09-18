@@ -13,6 +13,7 @@ import { FSDir, FSError, QubitFS } from './fs';
 import { NetStack } from './net';
 import { DEFAULT_REGISTRIES, PackageManager } from './pkg';
 import { PROGRAMS, Program, programKind } from './programs';
+import { WebInstaller } from './webinstall';
 import { KernelError, entanglementOf, isResult } from './util';
 import type { WindowManager } from './wm';
 
@@ -79,6 +80,8 @@ export interface KernelOptions {
   seed?: number;
   theta?: number;
   fsSnapshot?: FSDir;
+  /** Injectable for tests; defaults to the browser (or a no-op installer off the web). */
+  webInstall?: WebInstaller;
 }
 
 export type SysctlValue = number | string | boolean;
@@ -105,6 +108,8 @@ export class Kernel {
   wm: WindowManager | null = null;
   net: NetStack;
   pkg: PackageManager;
+  /** Installing QubitOS itself as an app from the browser (web builds only). */
+  webInstall: WebInstaller;
 
   constructor(opts: KernelOptions = {}) {
     const numQubits = opts.numQubits ?? 16;
@@ -123,6 +128,12 @@ export class Kernel {
     this.net = new NetStack(this);
     this.pkg = new PackageManager(this);
     this.log(`net: ${this.net.enabled ? 'online' : 'offline'}; qpm: ${Object.keys(this.pkg.installed).length} installed app(s)`);
+    this.webInstall = opts.webInstall ?? WebInstaller.fromGlobal();
+    this.webInstall.subscribe(() => {
+      this.log(this.webInstall.summary());
+      this.notify();
+    });
+    this.log(this.webInstall.summary());
   }
 
   // ------------------------------------------------------------ events

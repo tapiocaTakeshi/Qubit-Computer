@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { InstalledApp, RegistryEntry } from '../os/pkg';
 import { Body, Button, Card, Divider, Field, Mono, Row } from './components';
+import { InstallCard } from './InstallCard';
 import { useKernel } from './KernelContext';
 import { colors, radius, sans, spacing } from './theme';
 
@@ -67,6 +68,7 @@ export function StoreApp({ onOpen }: { onOpen: (app: string) => void }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.md }} keyboardShouldPersistTaps="handled">
+      <InstallCard compact />
       <Card title="Registry">
         <Row>
           <Field placeholder="search" value={query} onChangeText={setQuery} style={{ flex: 1 }} />

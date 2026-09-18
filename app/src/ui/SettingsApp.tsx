@@ -2,6 +2,7 @@ import Slider from '@react-native-community/slider';
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Body, Button, Card, Divider, Field, KV, Label, Row } from './components';
+import { InstallCard } from './InstallCard';
 import { useState } from 'react';
 import { useKernel } from './KernelContext';
 import { colors, spacing } from './theme';
@@ -25,6 +26,7 @@ export function SettingsApp() {
         <KV k="windows" v={String(kernel.wm?.windows.length ?? 0)} />
         <KV k="programs in /bin" v={String(u.programs.length)} />
       </Card>
+      <InstallCard />
       <Card title="System APQB (apqb.theta)">
         <Body color={colors.dim} style={{ fontSize: 12 }}>The kernel's own qubit. Its uncertainty η drives the scheduler's exploration rate and any η-mapped control signal.</Body>
         <Label>θ = {theta.toFixed(3)}  ·  r = {sys.r.toFixed(3)}  ·  η = {sys.T.toFixed(3)}</Label>

@@ -1,0 +1,27 @@
+{
+  "name": "QubitOS — Qubit Computer",
+  "short_name": "QubitOS",
+  "description": "A quantum computer whose qubits are APQBs (adjustable pseudo quantum bits), with the QubitOS desktop, shell and package manager on top.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0d0f1f",
+  "theme_color": "#e7e9fb",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["education", "productivity", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Terminal", "short_name": "Terminal", "description": "Open the qsh shell", "url": "./?app=terminal", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Finder", "short_name": "Finder", "description": "Browse QubitFS", "url": "./?app=finder", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "App Store", "short_name": "Store", "description": "Install QubitOS packages", "url": "./?app=store", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "QBNN Lab", "short_name": "QBNN", "description": "Train the quantum-bit neural network", "url": "./?app=qbnn", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}
