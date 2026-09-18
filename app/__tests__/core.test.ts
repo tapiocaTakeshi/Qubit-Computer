@@ -1,4 +1,5 @@
 import { APQB, thetaFromLatent, thetaFromR, chebyshevFeatures } from '../src/core/apqb';
+import { availableBackends, backendInfo, resolveBackend } from '../src/core/backend';
 import * as G from '../src/core/gates';
 import { StateVector, concurrence, threeTangle } from '../src/core/state';
 import { Circuit } from '../src/core/circuit';
@@ -8,6 +9,27 @@ import * as Q from '../src/core/qbnn';
 import { Rng } from '../src/core/rng';
 
 const close = (a: number, b: number, tol = 1e-9) => expect(Math.abs(a - b)).toBeLessThan(tol);
+
+describe('backend', () => {
+  test('cpu is always available, gpu/qnpu are not (yet) in this app', () => {
+    expect(backendInfo('cpu').available).toBe(true);
+    expect(backendInfo('gpu').available).toBe(false);
+    expect(backendInfo('qnpu').available).toBe(false);
+  });
+  test('availableBackends lists all three', () => {
+    expect(availableBackends().map((b) => b.name).sort()).toEqual(['cpu', 'gpu', 'qnpu']);
+  });
+  test('unknown backend name throws', () => {
+    expect(() => backendInfo('tpu')).toThrow();
+  });
+  test('resolveBackend falls back to cpu and reports why', () => {
+    const warnings: string[] = [];
+    const info = resolveBackend('qnpu', (m) => warnings.push(m));
+    expect(info.name).toBe('cpu');
+    expect(warnings.length).toBe(1);
+    expect(warnings[0]).toContain('qnpu');
+  });
+});
 
 describe('APQB', () => {
   test('unit circle identity and endpoints', () => {

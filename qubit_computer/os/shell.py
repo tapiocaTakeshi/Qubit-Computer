@@ -38,6 +38,7 @@ class Shell:
         self.commands: Dict[str, Callable[[List[str]], None]] = {
             "help": self.cmd_help, "?": self.cmd_help, "uname": self.cmd_uname, "uptime": self.cmd_uptime,
             "dmesg": self.cmd_dmesg, "sysctl": self.cmd_sysctl, "echo": self.cmd_echo, "motd": self.cmd_motd,
+            "backend": self.cmd_backend,
             "run": self.cmd_run, "spawn": self.cmd_spawn, "sched": self.cmd_sched, "ps": self.cmd_ps,
             "kill": self.cmd_kill, "log": self.cmd_log, "result": self.cmd_result, "draw": self.cmd_draw,
             "alloc": self.cmd_alloc, "free": self.cmd_free, "mem": self.cmd_mem, "regs": self.cmd_mem,
@@ -150,7 +151,7 @@ class Shell:
     def cmd_help(self, args: List[str]) -> None:
         self.out("QubitOS shell (qsh) commands:")
         groups = [
-            ("system", "help uname uptime dmesg sysctl [key [value]] motd echo exit"),
+            ("system", "help uname uptime dmesg sysctl [key [value]] backend [cpu|gpu|qnpu] motd echo exit"),
             ("processes", "run <prog> [args] [--shots N --seed S --prio P] | spawn <prog> [args] | sched | ps | kill <pid> | log <pid> | result <pid|last> | draw <prog> [args]"),
             ("memory", "alloc <n> [--name x --theta t1,t2,.. | --r r1,r2,..] | free <sid> | mem | reset <sid>"),
             ("registers", "gate <sid> <gate> <q..> [--p a,b] | measure <sid> [q..] [--shots N] | readout <sid> | state <sid> | ent <sid|last|pid>"),
@@ -192,6 +193,17 @@ class Shell:
             self.out(f"{key} = {self.k.sys_sysctl(key, args[1])}")
         else:
             self.out(f"{key} = {self.k.sys_sysctl(key)}")
+
+    def cmd_backend(self, args: List[str]) -> None:
+        if not args:
+            info = self.k.sys_backend()
+            self.out(f"current: {info['current']} (engine={info['engine']})")
+            for b in info["available"]:
+                flag = "*" if b["name"] == info["current"] else " "
+                status = "available" if b["available"] else "unavailable"
+                self.out(f"  {flag} {b['name']:<5} {status:<11} engine={b['engine']:<8} {b['detail']}")
+            return
+        self.out(f"backend = {self.k.sys_backend(args[0])}")
 
     def cmd_echo(self, args: List[str]) -> None:
         self.out(" ".join(args))
