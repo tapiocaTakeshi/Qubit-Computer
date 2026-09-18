@@ -18,10 +18,10 @@ function buildArgv(prog: Program, values: Record<string, string>): string[] {
   return argv;
 }
 
-export function ProgramsScreen() {
+export function ProgramsScreen({ initial }: { initial?: string } = {}) {
   const { kernel } = useKernel();
   const names = Object.keys(kernel.programs);
-  const [selected, setSelected] = useState(names[0]);
+  const [selected, setSelected] = useState(initial && initial in kernel.programs ? initial : names[0]);
   const [values, setValues] = useState<Record<string, Record<string, string>>>({});
   const [shots, setShots] = useState('512');
   const [seed, setSeed] = useState('');

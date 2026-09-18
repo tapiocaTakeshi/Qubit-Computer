@@ -138,3 +138,40 @@ describe('Shell', () => {
     expect(text.indexOf('pid 2 (ghz)')).toBeLessThan(text.indexOf('pid 1 (bell)'));
   });
 });
+
+describe('WindowManager', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { WindowManager } = require('../src/os/wm');
+  test('windows are kernel service processes', () => {
+    const k = new Kernel({ numQubits: 4, seed: 0 });
+    const wm = new WindowManager(k);
+    wm.setArea(800, 600);
+    const win = wm.open('terminal');
+    expect(k.process(win.pid).state).toBe('running');
+    expect(k.process(win.pid).name).toBe('gui:terminal');
+    expect(wm.open('terminal').id).toBe(win.id); // reused
+    const w2 = wm.open('finder', '/lib');
+    expect(wm.focused!.id).toBe(w2.id);
+    wm.focus(win.id);
+    expect(wm.focused!.id).toBe(win.id);
+    wm.close(win.id);
+    expect(k.process(win.pid).state).toBe('killed');
+    // killing from the kernel closes the window
+    k.sysKill(w2.pid);
+    expect(wm.windows.length).toBe(0);
+  });
+  test('shell open / windows / close', () => {
+    const lines: string[] = [];
+    const k = new Kernel({ numQubits: 4, seed: 0 });
+    const wm = new WindowManager(k);
+    const sh = new Shell(k, (l) => lines.push(l));
+    sh.executeLine('open apqb; open /lib/circuits; windows');
+    expect(wm.windows.length).toBe(2);
+    expect(lines.join('\n')).toContain('Finder');
+    sh.executeLine('close apqb; close 2; windows');
+    expect(wm.windows.length).toBe(0);
+    expect(sh.executeLine('open nope')).toBe(1);
+    sh.executeLine('open /home/user/hello.qsh');
+    expect(lines.join('\n')).toContain('concurrence');
+  });
+});

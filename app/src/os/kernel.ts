@@ -11,6 +11,7 @@ import { Rng } from '../core/rng';
 import { APQBReadout, StateVector, concurrence, threeTangle } from '../core/state';
 import { FSDir, FSError, QubitFS } from './fs';
 import { PROGRAMS, Program, programKind } from './programs';
+import type { WindowManager } from './wm';
 
 export const OS_NAME = 'QubitOS';
 export const OS_VERSION = '0.1.0';
@@ -99,6 +100,8 @@ export class Kernel {
   programs: Record<string, Program> = { ...PROGRAMS };
   /** Observers notified after any state change (used by the UI). */
   listeners = new Set<() => void>();
+  /** Attached by the desktop's WindowManager, if a GUI is running. */
+  wm: WindowManager | null = null;
 
   constructor(opts: KernelOptions = {}) {
     const numQubits = opts.numQubits ?? 16;
@@ -276,6 +279,19 @@ export class Kernel {
     proc.state = 'ready';
     this.processes.set(pid, proc);
     this.log(`spawn pid=${pid} ${name} ${argv.join(' ')} prio=${priority}`);
+    this.notify();
+    return proc;
+  }
+
+  /** Spawn a long-lived service process (GUI window, daemon) that stays "running" until killed. */
+  spawnService(name: string, argv: string[] = [], priority = 5): Process {
+    const program: Program = { name, description: 'service', usage: name, params: [] };
+    const pid = this.nextPid++;
+    const proc = new Process(pid, name, [...argv], program, priority, 0);
+    proc.state = 'running';
+    proc.started = Date.now();
+    this.processes.set(pid, proc);
+    this.log(`service pid=${pid} ${name} ${argv.join(' ')}`);
     this.notify();
     return proc;
   }

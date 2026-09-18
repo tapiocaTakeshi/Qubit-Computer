@@ -6,6 +6,7 @@ import { APQBReadout } from '../core/state';
 import { FSError } from './fs';
 import { isResult, Kernel, KernelError, Process } from './kernel';
 import { num, parseArgs, ParsedArgs } from './programs';
+import { APP_ORDER, APPS, AppId } from './wm';
 
 export type Out = (line: string) => void;
 
@@ -60,6 +61,7 @@ export const HELP_GROUPS: Array<[string, string]> = [
   ['registers', 'gate <sid> <gate> <q..> [--p a,b] | measure <sid> [q..] [--shots N] | readout <sid> | state <sid> | ent <sid|last|pid>'],
   ['apqb', 'apqb <theta> | apqb --r <r> | apqb --a <latent> | apqb --p1 <prob>  [--K k]'],
   ['files', 'ls cat cd pwd mkdir rm write <path> <text> tree save <pid|last> <path> exec <circuit.json> sh <script.qsh>'],
+  ['desktop', 'open <app|path> | windows | close <window id|app>   apps: ' + APP_ORDER.join(' ')],
 ];
 
 export class Shell {
@@ -85,6 +87,7 @@ export class Shell {
       ls: (a) => this.cmdLs(a), cat: (a) => this.cmdCat(a), cd: (a) => this.k.fs.cd(a[0] ?? '/home/user'), pwd: () => this.out(this.k.fs.cwd),
       mkdir: (a) => a.forEach((p) => this.k.fs.mkdir(p)), rm: (a) => this.cmdRm(a), write: (a) => this.cmdWrite(a), tree: (a) => this.cmdTree(a),
       save: (a) => this.cmdSave(a), sh: (a) => this.cmdSh(a),
+      open: (a) => this.cmdOpen(a), windows: () => this.cmdWindows(), close: (a) => this.cmdClose(a),
     };
   }
 
@@ -438,6 +441,59 @@ export class Shell {
     const seed = parsed.opts.seed !== undefined ? Math.round(num(parsed.opts.seed)) : undefined;
     this.out(circuit.draw());
     this.out(resultSummary(this.k.sysExecCircuit(circuit, shots, seed)));
+  }
+
+  // ---------------------------------------------------------- desktop
+  private cmdOpen(a: string[]): void {
+    const wm = this.k.wm;
+    if (!wm) throw new KernelError('no window manager (desktop not running)');
+    if (!a.length) throw new Error('usage: open <app> | open <path>');
+    const target = a[0];
+    if (target in APPS) {
+      const win = wm.open(target as AppId, a[1]);
+      this.out(`opened ${win.title} (window ${win.id}, pid ${win.pid})`);
+      return;
+    }
+    if (this.k.fs.exists(target)) {
+      const full = this.k.fs.resolve(target);
+      if (this.k.fs.isDir(full)) {
+        const win = wm.open('finder', full);
+        this.out(`opened ${full} in Finder (window ${win.id})`);
+      } else if (full.endsWith('.qsh')) {
+        this.runScript(this.k.fs.read(full));
+      } else if (full.endsWith('.json') && full.includes('/circuits/')) {
+        this.cmdExec([full]);
+      } else {
+        const win = wm.open('finder', full);
+        this.out(`opened ${full} in Finder (window ${win.id})`);
+      }
+      return;
+    }
+    throw new KernelError(`no such app or file: ${target}`);
+  }
+
+  private cmdWindows(): void {
+    const wm = this.k.wm;
+    if (!wm) throw new KernelError('no window manager (desktop not running)');
+    const lines = wm.list();
+    this.out(' WIN  PID      TITLE');
+    if (!lines.length) this.out('  (no windows)');
+    for (const l of lines) this.out(l);
+  }
+
+  private cmdClose(a: string[]): void {
+    const wm = this.k.wm;
+    if (!wm) throw new KernelError('no window manager (desktop not running)');
+    if (!a.length) throw new Error('usage: close <window id|app>');
+    if (a[0] in APPS) {
+      wm.closeApp(a[0] as AppId);
+      this.out(`closed ${a[0]}`);
+      return;
+    }
+    const id = Math.round(num(a[0]));
+    if (!wm.find(id)) throw new KernelError(`no such window: ${id}`);
+    wm.close(id);
+    this.out(`closed window ${id}`);
   }
 
   private cmdSh(a: string[]): void {
