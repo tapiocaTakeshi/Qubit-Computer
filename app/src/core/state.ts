@@ -30,9 +30,9 @@ export class StateVector {
   im: Float64Array;
 
   constructor(numQubits: number, amplitudes?: Complex[]) {
-    if (numQubits < 1) throw new Error('a register needs at least one qubit');
+    if (!Number.isInteger(numQubits) || numQubits < 1 || numQubits > 20) throw new Error('a register needs 1..20 simulated qubits');
     this.n = numQubits;
-    this.dim = 1 << numQubits;
+    this.dim = 2 ** numQubits;
     this.re = new Float64Array(this.dim);
     this.im = new Float64Array(this.dim);
     if (amplitudes) {
@@ -235,6 +235,7 @@ export class StateVector {
   }
 
   sample(shots: number, qubits?: number[], rng?: Rng): Record<string, number> {
+    if (!Number.isInteger(shots) || shots < 0 || shots > 16384) throw new Error('shots must be an integer in 0..16384');
     const r = rng ?? new Rng();
     const qs = qubits ?? [...Array(this.n).keys()];
     const probs = this.probabilities();

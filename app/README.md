@@ -1,6 +1,8 @@
 # QubitOS for React Native
 
-**Qubit Computer / QubitOS の React Native（Expo）アプリ版。** APQB 量子コンピュータのシミュレータと OS カーネルを TypeScript に移植し、UI 自体を QubitOS の **デスクトップ環境**（メニューバー・ウィンドウ・ドック）として動かします。開いた各ウィンドウはカーネルのサービスプロセスで、シェルの `ps` / `kill` / `open` / `windows` / `close` から見えます。ネットワークスタックとパッケージマネージャ `qpm` を備え、インターネット上のレジストリ（この リポジトリの `registry/`）や任意の URL からアプリをインストールできます。ネイティブ依存は AsyncStorage（仮想ファイルシステムの永続化）と Slider だけです。見た目は macOS Sonoma 風のフロステッドガラス・デザインです（メッシュグラデーションの壁紙、すりガラスのメニューバーとフローティング Dock、多層のソフトシャドウ、インディゴ／バイオレットのアクセント、Web では Inter / JetBrains Mono を読み込み。ターミナルはダークガラス調）。トークンは `src/ui/theme.ts` にまとめてあります。
+QVM32/QVM64・ターミナル拡張・TextEdit・Calculator の仕様は [スマホ版ガイド](../docs/MOBILE_COMPUTER.md) を参照してください。QubitOS はホスト型の実行環境で、macOS / zsh の完全互換ではありません。
+
+**Qubit Computer / QubitOS の React Native（Expo）アプリ版。** APQB 量子コンピュータのシミュレータと OS カーネルを TypeScript に移植し、UI 自体を QubitOS の **デスクトップ環境**（メニューバー・ウィンドウ・ドック）として動かします。開いた各ウィンドウはカーネルのサービスプロセスで、シェルの `ps` / `kill` / `open` / `windows` / `close` から見えます。ネットワークスタックとパッケージマネージャ `qpm` を備え、インターネット上のレジストリ（この リポジトリの `registry/`）や任意の URL からアプリをインストールできます。ネイティブ依存には AsyncStorage（仮想ファイルシステムの永続化）、Slider、WebView があります。見た目は macOS Sonoma 風のフロステッドガラス・デザインです（メッシュグラデーションの壁紙、すりガラスのメニューバーとフローティング Dock、多層のソフトシャドウ、インディゴ／バイオレットのアクセント、Web では Inter / JetBrains Mono を読み込み。ターミナルはダークガラス調）。トークンは `src/ui/theme.ts` にまとめてあります。
 
 ```text
 app/
@@ -50,7 +52,7 @@ cd app
 npm install
 npx expo start          # Expo Go または開発ビルドで開く
 npx expo start --web    # ブラウザ
-npm test                # jest（コア・OS・インストーラの 54 テスト）
+npm test                # jest（コア・OS・QVM・シェル・インストーラのテスト）
 npm run typecheck       # tsc --noEmit
 npm run export:web      # 静的 Web ビルド（dist/）
 ```
@@ -164,7 +166,7 @@ npm run dist:win      # Windows インストーラ（Windows 上で実行）
 | **Terminal** | Python 版と同じコマンド体系の qsh。`open finder`、`open /lib/circuits`、`windows`、`close apqb` でウィンドウも操作可能 |
 | **Finder** | QubitFS のブラウザ。パンくず、プレビュー、`.qsh` の実行、回路 JSON の実行、削除、フォルダ作成 |
 | **Programs** | `/bin` のプログラムをフォームで実行。counts ヒストグラム、状態ベクトル、r / η / θ、concurrence / three-tangle、回路図 |
-| **Qubit Memory** | 物理量子ビットのプールとセグメント。ゲート適用・サンプリング・収縮測定・reset・free |
+| **Qubit Memory** | シミュレートする量子ビットのプールとセグメント。ゲート適用・サンプリング・収縮測定・reset・free |
 | **APQB** | θ スライダーで APQB を操作。Bloch 大円、r / η / P(0) / P(1) / エントロピー、Chebyshev 特徴、η → 温度・ドロップアウト・探索率 |
 | **QBNN Lab** | XOR / 3-bit parity の学習（K, λ, epochs）、損失グラフ、η、予測。学習中はサービスプロセスとして `ps` に出ます |
 | **App Store** | インターネット上のレジストリからアプリを検索・インストール（Get）、URL から直接インストール、任意の Web ページを Web アプリとして追加 |

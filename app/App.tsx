@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
-import { Platform, SafeAreaView, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet } from 'react-native';
 import { Desktop } from './src/ui/Desktop';
 import { KernelProvider } from './src/ui/KernelContext';
 
@@ -28,7 +28,9 @@ export default function App() {
     <KernelProvider>
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
-        <Desktop />
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} enabled={Platform.OS !== 'web'}>
+          <Desktop />
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </KernelProvider>
   );

@@ -84,6 +84,7 @@ export function FinderApp({ path: initial, onOpenPath }: { path?: string; onOpen
               <Row style={{ marginBottom: 6 }}>
                 {isScript ? <Button title="Run Script" small onPress={() => act(() => shell.runScript(fs.read(selected)))} /> : null}
                 {isCircuit ? <Button title="Execute Circuit" small onPress={() => act(() => { const c = Circuit.fromJSON(fs.readJSON<CircuitJSON>(selected)); setOutput([c.draw(), resultSummary(kernel.sysExecCircuit(c, 256))]); })} /> : null}
+                <Button title="Edit" small kind="ghost" onPress={() => kernel.wm?.open('textedit', selected, true)} />
                 <Button title="Delete" small kind="danger" onPress={() => act(() => { fs.rm(selected); setSelected(null); kernel.notify(); })} />
               </Row>
               <ScrollView style={styles.previewBody}>

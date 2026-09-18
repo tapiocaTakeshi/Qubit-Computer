@@ -1,8 +1,10 @@
 # Qubit Computer / QubitOS
 
-**Qubit AI の APQB（Adjustable Pseudo Quantum Bit：調整可能擬似量子ビット）を量子ビットの基本単位とする量子コンピュータと、その上で動くオペレーティングシステム QubitOS。**
+**APQB（Adjustable Pseudo Quantum Bit：調整可能擬似量子ビット）の古典シミュレータと、スマホ上で動くホスト型デスクトップ QubitOS。**
 
-依存ライブラリなしの純 Python 実装です（Python 3.9+）。[Qubit](https://github.com/tapiocaTakeshi/Qubit) リポジトリの APQB / QBNN 理論（`apqb_qbnn_v2.py`、および改訂論文 *「調整可能擬似量子ビット（APQB）に基づく量子インスパイア多重線形ニューラルネットワーク」v2*）の数式をそのまま実装し、数値的に検証しています。
+スマホ版には独自 QVM32/QVM64、APQB 命令、起動時セルフテスト、Unix 風 qsh、TextEdit、Calculator を実装しています。[スマホ版の使い方・命令仕様・互換性](docs/MOBILE_COMPUTER.md) を参照してください。macOS / zsh の完全互換や Mac アプリのバイナリ実行は提供しません。
+
+Python 版は依存ライブラリなしの純 Python 実装です（Python 3.9+）。スマホ版は `app/` の TypeScript / Expo 実装です。[Qubit](https://github.com/tapiocaTakeshi/Qubit) リポジトリの APQB / QBNN 理論（`apqb_qbnn_v2.py`、および改訂論文 *「調整可能擬似量子ビット（APQB）に基づく量子インスパイア多重線形ニューラルネットワーク」v2*）の数式をそのまま実装し、数値的に検証しています。
 
 ```text
 |ψ(θ)⟩ = cosθ|0⟩ + sinθ|1⟩        0 ≤ θ ≤ π/2             (Eq. 1)

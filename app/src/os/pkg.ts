@@ -214,6 +214,7 @@ export class PackageManager {
         if (!pm.runScript) throw new KernelError('no script runner attached');
         const text = kernel.fs.read(app.main!);
         const status = pm.runScript(kernel, text, (l) => proc.log(l));
+        if (status !== 0) throw new KernelError(`script exited with status ${status}`);
         return { app: app.name, main: app.main, status };
       },
     };

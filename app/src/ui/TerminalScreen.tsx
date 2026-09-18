@@ -11,7 +11,7 @@ interface Line {
   kind: 'out' | 'cmd' | 'err';
 }
 
-const QUICK = ['help', 'run bell', 'run bell_apqb 0.4; ent last', 'run grover 101', 'apqb 0.3', 'alloc 2 --r 0.6,-0.2', 'open finder', 'windows', 'ps', 'dmesg 10', 'sh /home/user/hello.qsh', 'run qbnn_train xor --epochs 40'];
+const QUICK = ['qvm /home/user/Examples/bell.qasm', 'open textedit /home/user/Examples/bell.qasm', 'open calculator', 'help', 'run bell', 'run bell_apqb 0.4; ent last', 'run grover 101', 'apqb 0.3', 'alloc 2 --r 0.6,-0.2', 'open finder', 'windows', 'ps', 'dmesg 10', 'sh /home/user/hello.qsh', 'run qbnn_train xor --epochs 40'];
 
 /** Chip variant for the dark terminal chrome. */
 function QuickChip({ title, onPress }: { title: string; onPress: () => void }) {
@@ -27,6 +27,8 @@ export function TerminalScreen() {
   const { kernel } = useKernel();
   const [lines, setLines] = useState<Line[]>([]);
   const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
   const idRef = useRef(0);
@@ -46,18 +48,27 @@ export function TerminalScreen() {
 
   useEffect(() => {
     setLines([]);
+    try { setHistory(kernel.fs.read('/home/user/.qsh_history').trim().split('\n').reverse().filter(Boolean)); } catch { /* first session */ }
+    push('QubitOS · qsh · local simulator (not macOS / zsh)');
     push(`Last login: ${new Date().toLocaleString()} on qubitos`);
     shell.executeLine('motd');
   }, [kernel, shell]);
 
-  const submit = (cmd?: string) => {
+  const submit = async (cmd?: string) => {
+    if (busyRef.current) return;
     const line = (cmd ?? input).trim();
     if (!line) return;
     push(`${shell.prompt()}${line}`, 'cmd');
+    busyRef.current = true; setBusy(true);
     shell.executeLine(line);
-    setHistory((h) => [line, ...h].slice(0, 100));
+    const nextHistory = [line, ...history].slice(0, 100);
+    setHistory(nextHistory);
+    try { kernel.fs.write('/home/user/.qsh_history', [...nextHistory].reverse().join('\n') + '\n'); }
+    catch (e) { push(`qsh: could not save history: ${(e as Error).message}`, 'err'); }
+    kernel.notify();
     setHistIdx(-1);
     setInput('');
+    try { await shell.pending; } finally { busyRef.current = false; setBusy(false); }
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
   };
 
@@ -86,16 +97,24 @@ export function TerminalScreen() {
         <Text style={styles.prompt}>{shell.prompt()}</Text>
         <TextInput
           style={styles.input}
+          accessibilityLabel="Terminal command"
+          editable={!busy}
           value={input}
           onChangeText={setInput}
           onSubmitEditing={() => submit()}
-          placeholder="type a command (help)"
+          placeholder={busy ? "running…" : "type a command (help)"}
           placeholderTextColor={colors.inkDim}
           autoCapitalize="none"
           autoCorrect={false}
           blurOnSubmit={false}
           returnKeyType="send"
           onKeyPress={(e) => {
+            if (e.nativeEvent.key === 'Tab') {
+              e.preventDefault?.();
+              const matches = shell.complete(input);
+              if (matches.length === 1) setInput(input.replace(/\S*$/, matches[0]));
+              else if (matches.length) push(matches.join('  '));
+            }
             if (e.nativeEvent.key === 'ArrowUp') recall(1);
             if (e.nativeEvent.key === 'ArrowDown') recall(-1);
           }}
@@ -105,6 +124,9 @@ export function TerminalScreen() {
         </Pressable>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quick} contentContainerStyle={{ gap: 6, paddingHorizontal: spacing.sm, alignItems: 'center' }} keyboardShouldPersistTaps="always">
+        <QuickChip title="↑" onPress={() => recall(1)} />
+        <QuickChip title="↓" onPress={() => recall(-1)} />
+        <QuickChip title="Tab" onPress={() => { const matches = shell.complete(input); if (matches.length === 1) setInput(input.replace(/\S*$/, matches[0])); else if (matches.length) push(matches.join('  ')); }} />
         {QUICK.map((q) => (
           <QuickChip key={q} title={q} onPress={() => submit(q)} />
         ))}
@@ -122,9 +144,9 @@ const styles = StyleSheet.create({
   quickChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', ...web({ cursor: 'pointer', transitionProperty: 'background-color', transitionDuration: '120ms' }) },
   quickChipHover: { backgroundColor: 'rgba(255,255,255,0.14)' },
   quickChipText: { fontFamily: mono, color: colors.inkText, fontSize: 11.5 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.ink2, borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.08)', paddingHorizontal: spacing.md, paddingVertical: 4, gap: 4 },
-  prompt: { fontFamily: mono, color: '#a5b4fc', fontSize: 12.5, fontWeight: '500' },
-  input: { flex: 1, color: colors.inkText, fontFamily: mono, fontSize: 13.5, paddingVertical: 7, paddingHorizontal: 6, ...web({ outlineStyle: 'none', caretColor: '#c4b5fd' }) },
-  enter: { width: 28, height: 28, borderRadius: 8, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', ...web({ cursor: 'pointer' }) },
+  inputRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', backgroundColor: colors.ink2, borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.08)', paddingHorizontal: spacing.md, paddingVertical: 4, gap: 4 },
+  prompt: { maxWidth: '50%', fontFamily: mono, color: '#a5b4fc', fontSize: 12.5, fontWeight: '500' },
+  input: { flex: 1, color: colors.inkText, fontFamily: mono, fontSize: 16, paddingVertical: 7, paddingHorizontal: 6, ...web({ outlineStyle: 'none', caretColor: '#c4b5fd' }) },
+  enter: { width: 36, height: 36, borderRadius: 8, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', ...web({ cursor: 'pointer' }) },
   enterText: { color: '#fff', fontSize: 15, fontFamily: sans, lineHeight: 18 },
 });

@@ -3,6 +3,7 @@
  * the APQB scheduler (exploration rate eps = p_min + (p_max - p_min) * eta of
  * the system APQB), syscalls, filesystem and dmesg.
  */
+import { VirtualMachine, BOOT_ROM, BELL_ASSEMBLY, VMResult } from '../core/vm';
 import { APQB, thetaFromR } from '../core/apqb';
 import { availableBackends, BackendInfo, resolveBackend } from '../core/backend';
 import { Circuit } from '../core/circuit';
@@ -21,7 +22,7 @@ import type { WindowManager } from './wm';
 export { KernelError, isResult, entanglementOf };
 
 export const OS_NAME = 'QubitOS';
-export const OS_VERSION = '0.1.0';
+export const OS_VERSION = '0.2.0';
 
 export type ProcState = 'new' | 'ready' | 'running' | 'done' | 'failed' | 'killed';
 
@@ -113,9 +114,14 @@ export class Kernel {
   /** Installing QubitOS itself as an app from the browser (web builds only). */
   webInstall: WebInstaller;
   backendInfo: BackendInfo;
+  readonly bootReport: VMResult;
 
   constructor(opts: KernelOptions = {}) {
+    this.bootReport = new VirtualMachine(64).run(BOOT_ROM, 0);
+    if (this.bootReport.registers[1] !== '42' || this.bootReport.registers[2] !== '1') throw new KernelError('QVM power-on self-test failed');
+    this.log('QVM64: integer, RAM and APQB self-tests passed; starting hosted QubitOS');
     const numQubits = opts.numQubits ?? 16;
+    if (!Number.isInteger(numQubits) || numQubits < 1 || numQubits > 20) throw new KernelError('simulator supports 1..20 qubits');
     const theta = opts.theta ?? 0.2;
     this.backendInfo = resolveBackend(opts.backend ?? 'cpu', (msg) => this.log(msg));
     this.hw = new QubitComputer(numQubits);
@@ -125,10 +131,23 @@ export class Kernel {
     this.seed = opts.seed;
     this.sysctl = { 'apqb.theta': theta, 'sched.p_min': 0, 'sched.p_max': 0.5, 'hw.num_qubits': numQubits, 'run.shots': 1024, 'net.enabled': true, 'net.timeout_ms': 15000, 'net.retries': 2, 'net.registry': DEFAULT_REGISTRIES.join(','), 'hardware.backend': this.backendInfo.name };
     this.freeQubits = [...Array(numQubits).keys()];
-    this.log(`${OS_NAME} ${OS_VERSION} booting on APQB hardware: ${numQubits} physical qubits`);
+    this.log(`${OS_NAME} ${OS_VERSION} booting on APQB hardware: ${numQubits} simulated qubits`);
     this.log(`hardware backend: ${this.backendInfo.name} (engine=${this.backendInfo.engine}) - ${this.backendInfo.detail}`);
     this.log(`system APQB theta=${theta.toFixed(3)} -> r=${Math.cos(2 * theta) >= 0 ? '+' : ''}${Math.cos(2 * theta).toFixed(3)} eta=${Math.abs(Math.sin(2 * theta)).toFixed(3)} (scheduler exploration eps=${this.explorationRate().toFixed(3)})`);
     this.log(`fs: ${opts.fsSnapshot ? 'restored snapshot' : 'fresh'}; ${Object.keys(this.programs).length} programs in /bin`);
+    for (const dir of ['/home/user/Documents', '/home/user/Desktop', '/home/user/Downloads', '/home/user/Examples']) this.fs.mkdir(dir);
+    if (!this.fs.exists('/home/user/Examples/bell.qasm')) this.fs.write('/home/user/Examples/bell.qasm', BELL_ASSEMBLY);
+    this.fs.write('/etc/qvm-boot.json', JSON.stringify(this.bootReport, null, 2));
+    this.programs.qvm = {
+      name: 'qvm', description: 'Run QVM assembly with a simulated APQB coprocessor',
+      usage: 'qvm <file.qasm> [32|64]', params: [{ name: 'file', label: 'Assembly file', default: '/home/user/Examples/bell.qasm', kind: 'string' }],
+      job: (k, proc, args) => {
+        if (!args[0]) throw new Error('usage: qvm <file.qasm> [32|64]');
+        const result = new VirtualMachine(args[1] === undefined ? 64 : Number(args[1])).run(k.fs.read(args[0]), proc.seed);
+        for (const line of result.output) proc.log(line);
+        return result;
+      },
+    };
     this.refreshBin();
     this.net = new NetStack(this);
     this.pkg = new PackageManager(this);
@@ -196,6 +215,7 @@ export class Kernel {
     }
     if (!(k in this.sysctl)) throw new KernelError(`unknown sysctl key '${key}'`);
     if (value === undefined) return this.sysctl[k];
+    if (k === 'hw.num_qubits') throw new KernelError('hw.num_qubits is read-only');
     const old = this.sysctl[k];
     if (k === 'hardware.backend') {
       const info = resolveBackend(value, (msg) => this.log(msg));
@@ -210,9 +230,12 @@ export class Kernel {
     else if (typeof old === 'number') {
       const t = value.trim();
       nv = t.endsWith('pi') ? parseFloat(t.slice(0, -2) || '1') * Math.PI : parseFloat(t);
-      if (Number.isNaN(nv)) throw new KernelError(`not a number: ${value}`);
+      if (!Number.isFinite(nv)) throw new KernelError(`not a finite number: ${value}`);
     } else nv = value;
     if (k === 'apqb.theta' && (Number(nv) < 0 || Number(nv) > Math.PI / 2)) throw new KernelError('apqb.theta must lie in [0, pi/2]');
+    if (k === 'run.shots' && (!Number.isInteger(nv) || Number(nv) < 1 || Number(nv) > 16384)) throw new KernelError('run.shots must be 1..16384');
+    if (k === 'net.retries' && (!Number.isInteger(nv) || Number(nv) < 0 || Number(nv) > 5)) throw new KernelError('net.retries must be 0..5');
+    if (k === 'net.timeout_ms' && (Number(nv) < 100 || Number(nv) > 60000)) throw new KernelError('net.timeout_ms must be 100..60000');
     this.sysctl[k] = nv;
     this.log(`sysctl ${k}: ${old} -> ${nv}`);
     this.notify();
@@ -221,12 +244,13 @@ export class Kernel {
 
   // ------------------------------------------------------------ memory
   sysAlloc(size: number, name = '', apqbs?: APQB[], owner: number | null = null): Segment {
-    if (size < 1) throw new KernelError('segment size must be >= 1');
+    if (!Number.isInteger(size) || size < 1) throw new KernelError('segment size must be an integer >= 1');
     if (size > this.freeQubits.length) throw new KernelError(`out of qubits: requested ${size}, free ${this.freeQubits.length}`);
     if (apqbs && apqbs.length !== size) throw new KernelError(`expected ${size} initial APQBs, got ${apqbs.length}`);
+    const state = apqbs ? StateVector.fromAPQBs(apqbs) : new StateVector(size);
     const qubits = this.freeQubits.splice(0, size);
     const sid = this.nextSid++;
-    const seg: Segment = { sid, name: name || `seg${sid}`, qubits, state: apqbs ? StateVector.fromAPQBs(apqbs) : new StateVector(size), owner, created: Date.now(), history: [] };
+    const seg: Segment = { sid, name: name || `seg${sid}`, qubits, state, owner, created: Date.now(), history: [] };
     this.segments.set(sid, seg);
     this.log(`alloc sid=${sid} '${seg.name}' qubits=[${qubits}]`);
     this.notify();
@@ -266,6 +290,7 @@ export class Kernel {
   }
 
   sysMeasure(sid: number, qubits?: number[], shots = 1, collapse = true): { outcome?: string; counts?: Record<string, number>; qubits: number[]; shots: number; collapsed: boolean } {
+    if (!Number.isInteger(shots) || shots < 1 || shots > 16384) throw new KernelError('shots must be 1..16384');
     const seg = this.segment(sid);
     const qs = qubits && qubits.length ? qubits : [...Array(seg.state.n).keys()];
     if (shots <= 1) {
