@@ -135,7 +135,7 @@ class TestShell(unittest.TestCase):
         self.assertNotIn("host terminal", cap.text)
 
     def test_host_only_command_hint(self):
-        sh, cap = self.run_cmds(["brew install qubit-computer"])
+        sh, cap = self.run_cmds(["apt install qubit-computer"])
         self.assertEqual(sh.last_status, 127)
         self.assertIn("qsh is QubitOS's own virtual shell", cap.text)
         self.assertIn("host terminal", cap.text)
@@ -187,6 +187,27 @@ class TestShell(unittest.TestCase):
             sh, cap = self.run_cmds(["claude"])
         self.assertEqual(sh.last_status, 1)
         self.assertIn("claude exited with status 2", cap.text)
+
+    def test_brew_not_found(self):
+        with mock.patch("qubit_computer.os.shell.shutil.which", return_value=None):
+            sh, cap = self.run_cmds(["brew install qubit-computer"])
+        self.assertEqual(sh.last_status, 1)
+        self.assertIn("brew: command not found", cap.text)
+        self.assertIn("https://brew.sh", cap.text)
+
+    def test_brew_handoff(self):
+        with mock.patch("qubit_computer.os.shell.shutil.which", return_value="/opt/homebrew/bin/brew"), \
+                mock.patch("qubit_computer.os.shell.subprocess.call", return_value=0) as call:
+            sh, cap = self.run_cmds(["brew install qubit-computer"])
+        call.assert_called_once_with(["/opt/homebrew/bin/brew", "install", "qubit-computer"])
+        self.assertEqual(sh.last_status, 0)
+
+    def test_brew_nonzero_exit(self):
+        with mock.patch("qubit_computer.os.shell.shutil.which", return_value="/usr/bin/brew"), \
+                mock.patch("qubit_computer.os.shell.subprocess.call", return_value=1):
+            sh, cap = self.run_cmds(["brew doctor"])
+        self.assertEqual(sh.last_status, 1)
+        self.assertIn("brew exited with status 1", cap.text)
 
 
 class TestBoot(unittest.TestCase):
