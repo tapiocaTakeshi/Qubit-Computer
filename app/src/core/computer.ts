@@ -68,6 +68,8 @@ export class QubitComputer {
   }
 
   run(circuit: Circuit, shots = 1024, seed?: number): Result {
+    if (!Number.isInteger(shots) || shots < 0 || shots > 16384) throw new Error('shots must be an integer in 0..16384');
+    if (circuit.numQubits > this.maxQubits) throw new Error(`circuit has ${circuit.numQubits} qubits > maxQubits=${this.maxQubits}`);
     const t0 = Date.now();
     const rng = new Rng(seed);
     const measured = circuit.measuredQubits.length ? circuit.measuredQubits : [...Array(circuit.numQubits).keys()];
@@ -81,6 +83,9 @@ export class QubitComputer {
       }
     }
     let counts: Record<string, number> = {};
+    if ((2 ** circuit.numQubits) * Math.max(1, circuit.instructions.length) * (hasMid ? Math.max(1, shots) : 1) > 20000000) {
+      throw new Error('circuit exceeds the mobile operation budget; reduce qubits, gates or shots');
+    }
     const memory: string[] = [];
     let sv: StateVector;
     if (hasMid) {

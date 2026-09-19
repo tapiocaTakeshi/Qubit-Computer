@@ -18,6 +18,8 @@ import { MemoryScreen } from './MemoryScreen';
 import { ProgramsScreen } from './ProgramsScreen';
 import { QBNNApp } from './QBNNApp';
 import { SettingsApp } from './SettingsApp';
+import { TextEditApp } from './TextEditApp';
+import { CalculatorApp } from './CalculatorApp';
 import { TerminalScreen } from './TerminalScreen';
 import { PressState, colors, glass, mono, radius, sans, shadow, web } from './theme';
 
@@ -35,6 +37,8 @@ function useWindowManager(): WindowManager {
 
 function AppContent({ win, wm }: { win: OSWindow; wm: WindowManager }) {
   switch (win.app) {
+    case 'textedit': return <TextEditApp path={win.arg} />;
+    case 'calculator': return <CalculatorApp />;
     case 'terminal': return <TerminalScreen />;
     case 'finder': return <FinderApp path={win.arg} onOpenPath={(p) => wm.setTitle(win.id, p === '/' ? 'Finder' : `Finder — ${p.split('/').pop()}`)} />;
     case 'programs': return <ProgramsScreen initial={win.arg} />;
@@ -306,7 +310,7 @@ export function Desktop() {
 }
 
 const DOCK_COLORS: Record<BuiltinAppId, string> = {
-  terminal: '#1c1e33', finder: '#3b82f6', programs: '#22c55e', memory: '#6366f1', apqb: '#f97316', qbnn: '#a855f7', activity: '#0ea5e9', settings: '#64748b', store: '#2563eb', browser: '#14b8a6',
+  textedit: '#f59e0b', calculator: '#475569', terminal: '#1c1e33', finder: '#3b82f6', programs: '#22c55e', memory: '#6366f1', apqb: '#f97316', qbnn: '#a855f7', activity: '#0ea5e9', settings: '#64748b', store: '#2563eb', browser: '#14b8a6',
 };
 
 const WALLPAPER_STOPS: Array<[number, number, number]> = [[223, 227, 251], [232, 232, 252], [238, 240, 251], [235, 243, 251], [227, 238, 251]];

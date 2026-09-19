@@ -12,17 +12,22 @@ export function ScriptApp({ name }: { name: string }) {
   const [lines, setLines] = useState<string[]>([]);
   const shell = useMemo(() => new Shell(kernel, (l) => setLines((prev) => [...prev, l].slice(-1500))), [kernel]);
 
-  const run = () => {
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
     if (!app?.main) return;
+    if (busy) return;
+    setBusy(true);
     setLines([]);
     const proc = kernel.spawnService(`app:${name}`, ['run']);
     try {
       shell.runScript(kernel.fs.read(app.main));
-      proc.state = 'done';
+      await shell.pending;
+      if (proc.state !== 'killed') proc.state = shell.lastStatus === 0 ? 'done' : 'failed';
     } catch (e) {
       setLines((p) => [...p, `error: ${(e as Error).message}`]);
       proc.state = 'failed';
     }
+    setBusy(false);
     proc.finished = Date.now();
     kernel.notify();
   };
@@ -43,7 +48,7 @@ export function ScriptApp({ name }: { name: string }) {
           <Mono color={colors.dim} style={{ fontSize: 10 }}>{app.main}</Mono>
         </View>
         <Row>
-          <Button title="Run Again" small onPress={run} />
+          <Button title="Run Again" disabled={busy} small onPress={run} />
         </Row>
       </View>
       <ScrollView style={styles.output} contentContainerStyle={{ padding: spacing.sm }}>

@@ -7,6 +7,8 @@ import { FSError } from './fs';
 import type { Kernel, Process } from './kernel';
 import { entanglementOf, isResult, KernelError } from './util';
 import { num, parseArgs, ParsedArgs } from './programs';
+import { parseShell, expandWord, Pipeline, Command } from './syntax';
+import { unixCommands } from './unix';
 import { APP_ORDER, AppId, isBuiltinApp } from './wm';
 
 export type Out = (line: string) => void;
@@ -73,6 +75,14 @@ export class Shell {
   lastStatus = 0;
   /** Promise of the most recent asynchronous command (curl, wget, qpm, open <url>). */
   pending: Promise<void> = Promise.resolve();
+  env: Record<string, string> = { HOME: '/home/user', USER: 'user', SHELL: '/bin/qsh', PATH: '/bin', TERM: 'qsh' };
+  writeRaw = (text: string): void => this.out(text.replace(/\n$/, ''));
+  stdin = '';
+  history: string[] = [];
+  private activeCommand: Promise<void> | null = null;
+  private busy = false;
+  private scriptDepth = 0;
+  private asyncAllowed = true;
   onClear: (() => void) | null = null;
   commands: Record<string, (args: string[]) => void>;
 
@@ -96,55 +106,123 @@ export class Shell {
       curl: (a) => this.cmdCurl(a), wget: (a) => this.cmdWget(a), qpm: (a) => this.cmdQpm(a),
       install: (a) => this.cmdInstall(a),
     };
-    if (!kernel.pkg.runScript) kernel.pkg.runScript = (k, text, out) => new Shell(k, out).runScript(text);
+    Object.assign(this.commands, unixCommands(this));
+    if (!kernel.pkg.runScript) kernel.pkg.runScript = (k, text, out) => {
+      const shell = new Shell(k, out);
+      shell.asyncAllowed = false;
+      return shell.runScript(text);
+    };
   }
 
   prompt(): string {
     return `qubitos:${this.k.fs.cwd}$ `;
   }
 
+  /** Commands complete synchronously until the first network operation, then resume in order. */
   executeLine(line: string): number {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) return 0;
-    for (const part of splitCommands(trimmed)) {
-      let argv: string[];
-      try {
-        argv = tokenize(part);
-      } catch (e) {
-        this.out(`qsh: parse error: ${(e as Error).message}`);
-        this.lastStatus = 2;
-        continue;
-      }
-      if (!argv.length) continue;
-      let [name, ...args] = argv;
-      let fn = this.commands[name];
-      if (!fn && name in this.k.programs) {
-        fn = this.commands.run;
-        args = [name, ...args];
-      }
-      if (!fn) {
-        this.out(`qsh: command not found: ${name} (try 'help')`);
-        this.lastStatus = 127;
-        continue;
-      }
-      try {
-        fn(args);
-        this.lastStatus = 0;
-      } catch (e) {
-        if (e instanceof KernelError || e instanceof FSError || e instanceof Error) {
-          this.out(`qsh: ${name}: ${e.message}`);
-          this.lastStatus = 1;
-        } else throw e;
-      }
+    if (this.busy) {
+      this.out('qsh: session busy; wait for the current command');
+      return 1;
     }
-    this.k.notify();
+    if (!line.trim()) return this.lastStatus;
+    this.history.push(line);
+    this.history = this.history.slice(-100);
+    let list: Pipeline[];
+    try { list = parseShell(line); }
+    catch (e) { this.out(`qsh: parse error: ${(e as Error).message}`); return this.lastStatus = 2; }
+    const next = (i: number): void | Promise<void> => {
+      for (; i < list.length; i++) {
+        const p = list[i];
+        if ((p.when === '&&' && this.lastStatus !== 0) || (p.when === '||' && this.lastStatus === 0)) continue;
+        const result = this.pipeline(p.commands);
+        if (result) return result.then(() => next(i + 1));
+      }
+    };
+    const result = next(0);
+    if (result) {
+      this.busy = true;
+      this.pending = result.finally(() => { this.busy = false; this.k.notify(); });
+    } else { this.pending = Promise.resolve(); this.k.notify(); }
     return this.lastStatus;
   }
 
+  private pipeline(commands: Command[], i = 0, input = ''): void | Promise<void> {
+    const cmd = commands[i];
+    const originalOut = this.out;
+    const originalRaw = this.writeRaw;
+    const previousStatus = this.lastStatus;
+    let output = '';
+    const expand = (w: Command['words'][number]) => {
+      const v = expandWord(w, { ...this.env, PWD: this.k.fs.cwd }, previousStatus);
+      return w[0]?.expand && (v === '~' || v.startsWith('~/')) ? this.env.HOME + v.slice(1) : v;
+    };
+    let target: { path: string } | undefined;
+    let args = cmd.words.map(expand);
+    const name = args.shift()!;
+    this.stdin = input;
+    this.activeCommand = null;
+    this.lastStatus = 0;
+    const finish = () => {
+      this.out = originalOut;
+      this.writeRaw = originalRaw;
+      this.stdin = '';
+      if (target) {
+        try { this.k.fs.write(target.path, output, true); }
+        catch (e) { originalOut(`qsh: ${(e as Error).message}`); this.lastStatus = 1; }
+      } else if (i === commands.length - 1 && output) originalRaw(output);
+      if (i + 1 < commands.length) return this.pipeline(commands, i + 1, target ? '' : output);
+    };
+    try {
+      for (const redir of cmd.redirects) {
+        const path = expand(redir.path);
+        if (!path) throw new Error('empty redirection path');
+        if (redir.op === '<') this.stdin = this.k.fs.read(path);
+        else {
+          this.k.fs.write(path, '', redir.op === '>>');
+          target = { path };
+        }
+      }
+      this.out = (text) => { output += text + '\n'; };
+      this.writeRaw = (text) => { output += text; };
+      let fn = Object.hasOwn(this.commands, name) ? this.commands[name] : undefined;
+      if (!fn && Object.hasOwn(this.k.programs, name)) { fn = this.commands.run; args = [name, ...args]; }
+      if (!fn) {
+        originalOut(`qsh: command not found: ${name} (try 'help')`);
+        this.lastStatus = 127;
+      } else fn(args);
+    } catch (e) {
+      originalOut(`qsh: ${name}: ${(e as Error).message}`);
+      this.lastStatus = 1;
+    }
+    const pending = this.activeCommand as Promise<void> | null;
+    if (pending) return pending.then(finish);
+    return finish();
+  }
+
   runScript(text: string): number {
-    let status = 0;
-    for (const line of text.split('\n')) status = this.executeLine(line);
-    return status;
+    if (this.scriptDepth >= 12) throw new Error('script nesting limit exceeded');
+    const child = new Shell(this.k, l => this.out(l));
+    child.writeRaw = text => this.writeRaw(text);
+    child.env = { ...this.env };
+    child.scriptDepth = this.scriptDepth + 1;
+    child.asyncAllowed = this.asyncAllowed;
+    const status = child.executeLine(text);
+    if (child.busy) {
+      this.activeCommand = child.pending.then(() => { this.lastStatus = child.lastStatus; });
+      this.pending = this.activeCommand;
+    }
+    return this.lastStatus = status;
+  }
+
+  complete(input: string): string[] {
+    const token = input.split(/\s+/).pop() ?? '';
+    if (!input.includes(' ')) return Object.keys({ ...this.commands, ...this.k.programs }).filter(x => x.startsWith(token)).sort();
+    const expanded = token.replace(/^~(?=\/|$)/, this.env.HOME);
+    const slash = expanded.lastIndexOf('/');
+    const dir = slash < 0 ? this.k.fs.cwd : expanded.slice(0, slash) || '/';
+    const prefix = expanded.slice(slash + 1);
+    try { return this.k.fs.ls(dir).filter(x => x.startsWith(prefix)).map(x => token.slice(0, token.lastIndexOf('/') + 1) + x); }
+    catch { return []; }
   }
 
   // ---------------------------------------------------------- helpers
@@ -168,8 +246,7 @@ export class Shell {
   private showProcess(proc: Process, brief = false): void {
     for (const l of proc.logs) this.out(l);
     if (proc.state === 'failed') {
-      this.out(`pid ${proc.pid} failed: ${proc.error}`);
-      return;
+      throw new KernelError(`pid ${proc.pid} failed: ${proc.error}`);
     }
     if (isResult(proc.result)) this.out(resultSummary(proc.result));
     else if (proc.result !== null && !brief) this.out(JSON.stringify(proc.result, null, 2));
@@ -202,7 +279,10 @@ export class Shell {
 
   // ----------------------------------------------------------- system
   private cmdHelp(_a: string[]): void {
-    this.out('QubitOS shell (qsh) commands:');
+    this.out('QubitOS qsh — Unix-style subset, not zsh or macOS');
+    this.out('Pipelines: |   redirects: > >> <   conditions: && ||   quotes, $VAR, $?');
+    this.out('Utilities: touch cp mv printf grep head tail wc sort uniq env export history which whoami true false');
+    this.out('Virtual CPU: qvm <file.qasm> [32|64]   Apps: open textedit | open calculator');
     for (const [g, t] of HELP_GROUPS) this.out(`  ${g.padEnd(10)} ${t}`);
     this.out('programs in /bin: ' + Object.keys(this.k.programs).sort().join(', '));
     this.out("angles accept 'pi' suffix (0.25pi). Bitstrings print qubit 0 on the left.");
@@ -495,8 +575,8 @@ export class Shell {
       } else if (full.endsWith('.json') && full.includes('/circuits/')) {
         this.cmdExec([full]);
       } else {
-        const win = wm.open('finder', full);
-        this.out(`opened ${full} in Finder (window ${win.id})`);
+        const win = wm.open('textedit', full, true);
+        this.out(`opened ${full} in TextEdit (window ${win.id})`);
       }
       return;
     }
@@ -529,7 +609,8 @@ export class Shell {
 
   // ---------------------------------------------------------- network
   private async<T>(fn: () => Promise<T>): void {
-    this.pending = fn()
+    if (!this.asyncAllowed) throw new Error('network commands require sh <file> or the script app window; synchronous package jobs cannot await them');
+    this.activeCommand = fn()
       .then(() => undefined)
       .catch((e: unknown) => {
         this.out(`qsh: ${(e as Error).message}`);

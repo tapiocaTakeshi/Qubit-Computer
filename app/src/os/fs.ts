@@ -11,7 +11,10 @@ const normalize = (path: string): string => {
   for (const p of path.split('/')) {
     if (!p || p === '.') continue;
     if (p === '..') parts.pop();
-    else parts.push(p);
+    else {
+      if (['__proto__', 'constructor', 'prototype'].includes(p)) throw new FSError('reserved path component');
+      parts.push(p);
+    }
   }
   return '/' + parts.join('/');
 };
@@ -21,7 +24,18 @@ export class QubitFS {
   cwd = '/';
 
   constructor(snapshot?: FSDir) {
-    if (snapshot) this.root = snapshot;
+    if (snapshot) {
+      const validate = (node: unknown, depth = 0): void => {
+        if (typeof node === 'string') return;
+        if (!node || typeof node !== 'object' || Array.isArray(node) || depth > 64) throw new FSError('invalid filesystem snapshot');
+        for (const [name, child] of Object.entries(node)) {
+          if (!name || name === '.' || name === '..' || name.includes('/') || ['__proto__', 'constructor', 'prototype'].includes(name)) throw new FSError('invalid filesystem entry');
+          validate(child, depth + 1);
+        }
+      };
+      validate(snapshot);
+      this.root = JSON.parse(JSON.stringify(snapshot)) as FSDir;
+    }
     else this.populateDefaults();
   }
 
@@ -149,9 +163,9 @@ export class QubitFS {
 
   private populateDefaults(): void {
     for (const d of ['/bin', '/etc', '/home/user', '/var/log', '/var/results', '/lib/circuits', '/lib/qbnn']) this.mkdir(d);
-    this.write('/etc/motd', "Welcome to QubitOS -- an operating system for the APQB quantum computer.\nType 'help' for commands, 'run bell' to start, 'apqb 0.3' to inspect a qubit.\n");
+    this.write('/etc/motd', "Welcome to QubitOS -- a hosted desktop with an APQB simulator.\nqsh is a Unix-style subset, not macOS/zsh. Type 'help' for commands, 'run bell' to start, 'apqb 0.3' to inspect a qubit.\n");
     this.write('/etc/release', JSON.stringify({ name: 'QubitOS', platform: 'react-native' }));
-    this.write('/home/user/hello.qsh', '# QubitOS shell script: an APQB Bell pair\necho preparing |Psi2(theta=0.4)> = cos(0.4)|00> + sin(0.4)|11>\nrun bell_apqb 0.4 --shots 256 --seed 7\nent last\n');
+    this.write('/home/user/hello.qsh', '# QubitOS shell script: an APQB Bell pair\necho "preparing |Psi2(theta=0.4)> = cos(0.4)|00> + sin(0.4)|11>"\nrun bell_apqb 0.4 --shots 256 --seed 7\nent last\n');
     this.write('/lib/circuits/bell.json', JSON.stringify({ name: 'bell', num_qubits: 2, instructions: [{ gate: 'h', targets: [0] }, { gate: 'cx', targets: [0, 1] }, { gate: 'measure', targets: [0, 1] }] }, null, 2));
     this.write('/lib/circuits/apqb_register.json', JSON.stringify({ name: 'apqb_register', num_qubits: 3, initial_correlations: [0.9, 0.0, -0.6], instructions: [{ gate: 'measure', targets: [0, 1, 2] }] }, null, 2));
   }

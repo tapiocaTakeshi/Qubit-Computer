@@ -10,17 +10,21 @@ import { colors, spacing } from './theme';
 
 /** System Settings: about, sysctl knobs, filesystem reset. */
 export function SettingsApp() {
-  const { kernel, resetFilesystem } = useKernel();
+  const { kernel, resetFilesystem, storageError } = useKernel();
   const u = kernel.sysUname();
   const theta = Number(kernel.sysctl['apqb.theta']);
   const sys = kernel.systemAPQB();
   const pmax = Number(kernel.sysctl['sched.p_max']);
   const shots = Number(kernel.sysctl['run.shots']);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [registry, setRegistry] = useState(String(kernel.sysctl['net.registry']));
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.md }}>
       <Card title="About This Computer">
         <KV k="system" v={`${u.os} ${u.version}`} />
+        <KV k="virtual CPU" v="QVM32 / QVM64 · 16 registers" />
+        <KV k="boot self-test" v={kernel.bootReport.halted ? 'CPU + RAM + APQB passed' : 'failed'} />
+        <Body color={colors.dim} style={{ fontSize: 12 }}>Runs locally inside this app. APQB is simulated on the phone CPU. qsh supports a subset of Unix commands; macOS, zsh and Mac .app binaries are not included.</Body>
         <KV k="hardware" v={`${u.hardware} · ${u.numQubits} qubits`} />
         <KV k="uptime" v={`${(u.uptimeMs / 1000).toFixed(0)} s`} />
         <KV k="processes" v={String(kernel.processes.size)} />
@@ -64,10 +68,12 @@ export function SettingsApp() {
         </Row>
       </Card>
       <Card title="Storage">
+        {storageError ? <Body color={colors.danger}>{storageError}</Body> : null}
         <Body color={colors.dim} style={{ fontSize: 12 }}>QubitFS is saved to this device automatically. Resetting restores the factory filesystem and reboots the kernel.</Body>
         <Row style={{ marginTop: spacing.sm }}>
-          <Button title="Reset Filesystem…" small kind="danger" onPress={() => { resetFilesystem().catch(() => undefined); }} />
+          <Button title="Reset Filesystem…" small kind="danger" onPress={() => setConfirmReset(true)} />
         </Row>
+        {confirmReset ? <Row><Body>Delete all files in QubitFS?</Body><Button title="Delete all files" kind="danger" onPress={() => { setConfirmReset(false); resetFilesystem().catch(() => undefined); }} /><Button title="Cancel" kind="ghost" onPress={() => setConfirmReset(false)} /></Row> : null}
       </Card>
       <View style={{ height: 20 }} />
     </ScrollView>
