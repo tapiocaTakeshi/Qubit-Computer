@@ -9,9 +9,8 @@
  * In this TypeScript/React Native app there is (yet) no device-accelerated
  * compute path, so `gpu` and `qnpu` are honestly reported as unavailable
  * and selecting either falls back to `cpu`, the engine every StateVector
- * already uses. The Python package additionally ships a real NumPy-backed
- * `gpu` engine (`pip install -e ".[gpu]"`) for the heavy 2**n amplitude
- * updates -- see `qubit_computer/backend.py`.
+ * already uses. The Python package also has NumPy CPU vectorization under
+ * the legacy name `gpu`; it does not ship a physical GPU compute driver.
  */
 
 export type Backend = 'cpu' | 'gpu' | 'qnpu';
@@ -38,7 +37,7 @@ export function backendInfo(name: string): BackendInfo {
   if (b === 'gpu') {
     return {
       name: 'gpu', available: false, engine: '-',
-      detail: 'no device-accelerated kernel in this app yet; the Python package has a NumPy-vectorized gpu engine (pip install -e ".[gpu]")',
+      detail: 'no GPU compute driver in this app; the Python package has NumPy CPU vectorization under the legacy name gpu',
     };
   }
   return {

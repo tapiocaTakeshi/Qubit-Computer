@@ -8,10 +8,9 @@ math, not which quantum processor is used.
 * ``cpu``  -- the dependency-free pure-Python engine. Always available;
   this is what every other module in this package uses by default, so
   the test suite and existing behaviour are unaffected.
-* ``gpu``  -- a vectorized engine. It dispatches the state-vector amplitude
-  update through NumPy when NumPy is installed (``pip install -e ".[gpu]"``);
-  point that NumPy build at CUDA/ROCm (or swap in CuPy) for real on-device
-  execution. Falls back to ``cpu`` when NumPy is not installed.
+* ``gpu`` -- a legacy name for NumPy CPU vectorization, not GPU execution.
+  It dispatches state-vector updates through NumPy when installed
+  (``pip install -e ".[gpu]"``). A physical GPU path is not implemented.
 * ``qnpu`` -- a dedicated APQB/QBNN processor. This is a *planned future*
   backend (see the QubitOS architecture notes in the README): no such
   hardware or driver exists yet, so selecting it always falls back to
@@ -70,8 +69,8 @@ def backend_info(name: Union[str, Backend]) -> BackendInfo:
     if b is Backend.GPU:
         if _numpy_available():
             return BackendInfo(Backend.GPU, True, "numpy",
-                                "vectorized amplitude updates via numpy "
-                                "(install a CUDA/ROCm-enabled numpy or cupy build for on-device execution)")
+                                "vectorized amplitude updates via numpy on CPU; "
+                                "legacy 'gpu' name, no physical GPU driver")
         return BackendInfo(Backend.GPU, False, "numpy",
                             "numpy is not installed; run `pip install -e \".[gpu]\"` to enable the vectorized engine")
     return BackendInfo(Backend.QNPU, False, "-",
