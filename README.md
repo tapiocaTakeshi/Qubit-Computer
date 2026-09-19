@@ -77,15 +77,19 @@ qubitos
 で更新、`brew uninstall qubit-computer` で削除できます。
 
 > 上記の `brew` コマンドは**ホスト側の実際のターミナル**（`qubitos` を起動する前のシェル）で実行してください。
-> `qubitos` を起動した後の `qsh` プロンプト（`qubitos:/$`）は QubitOS 自身の仮想シェルで、ホストの Homebrew は
-> 実行できません。Python 版 CLI の `qsh` の中で `brew ...` と打つと `command not found` になります。また
 > Homebrew が未インストールの場合は先に https://brew.sh のインストーラーを実行してください。
 >
-> Web アプリ（PWA）版の `qsh` には、この違いを埋めるために **`brew`** が QubitOS 自身のパッケージマネージャ
-> `qpm` のエイリアスとして組み込まれています。`brew install <name|url>` / `brew search [q]` / `brew list` /
-> `brew uninstall <name>` / `brew update` / `brew info <name>` で、`registry/` のアプリ（QubitOS スクリプト
-> パッケージ / Web アプリ）をブラウザの中だけで探して導入できます。ホストの実ファイルには触れないため、
-> ホスト側の実 Homebrew（上記）とは別物です。
+> Python 版 CLI の `qsh` プロンプト（`qubitos:/$`）の中でも `brew ...` は使えます。`claude` コマンドと同様に、
+> ホスト PATH 上の**本物の** `brew` バイナリへそのまま引数を渡して実行するので（`qsh` 自身が偽の実装を持つ
+> わけではありません）、`qubitos:/$ brew install <formula>` のように打てます。`qsh` はこのビルドではホスト上の
+> 実プロセスとして動く仮想カーネルであり、ブラウザのサンドボックスの中にいるわけではないため、これが可能です。
+>
+> 一方、Web アプリ（PWA）版はブラウザのタブの中で完結しており、ホストのプロセスを起動する手段がありません。
+> そちらの `qsh` では **`brew`** は QubitOS 自身のパッケージマネージャ `qpm` のエイリアスとして動作し、
+> `brew install <name|url>` / `brew search [q]` / `brew list` / `brew uninstall <name>` / `brew update` /
+> `brew info <name>` で `registry/` のアプリ（QubitOS スクリプトパッケージ / Web アプリ）をブラウザの中だけで
+> 探して導入できます。ホストの実ファイルには触れないため、ホスト側の実 Homebrew（上記・Python 版 `qsh`）とは
+> 別物です。
 
 ### pip（ソースから）
 
@@ -216,6 +220,7 @@ registers  gate <sid> <gate> <q..> [--p a,b] | measure <sid> [q..] [--shots N] |
 apqb       apqb <theta> | apqb --r <r> | apqb --a <latent> | apqb --p1 <prob>
 files      ls cat cd pwd mkdir rm write tree save <pid|last> <path> exec <circuit.json> sh <script.qsh> sync
 external   claude [args...]   -- ホストにインストール済みの Claude Code CLI を起動（例: Homebrew でインストール）
+           brew [args...]     -- ホストにインストール済みの本物の Homebrew (brew) を起動
 ```
 
 角度は `0.25pi` のように `pi` 接尾辞が使えます。ビット列は **量子ビット 0 を左端** に表示します。
@@ -235,6 +240,18 @@ qubitos:/$ claude -p "このリポジトリの APQB とは何か説明して"
 
 `claude` が見つからない場合は qsh がインストール方法を案内するエラーを表示します。終了すると
 そのまま qsh のプロンプトに戻ります。
+
+### qsh から Homebrew を使う
+
+同じ仕組みで `brew` コマンドもホスト OS の本物の Homebrew（`brew`）をそのまま起動します。qsh 自身は
+Homebrew の代替品を持たず、PATH 上に見つかった `brew` バイナリへ引数をそのまま渡すだけです。
+
+```text
+qubitos:/$ brew install qubit-computer
+qubitos:/$ brew list
+```
+
+`brew` が見つからない場合は https://brew.sh を案内するエラーを表示します。
 
 ### セッション例
 

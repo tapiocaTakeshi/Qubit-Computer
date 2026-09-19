@@ -27,8 +27,11 @@ __all__ = ["Shell"]
 # Package managers and other host-only tools a new user might type expecting a real terminal.
 # qsh is QubitOS's own virtual shell (kernel syscalls, not a host process), so these can never
 # work here -- point the user back to their host terminal instead of a bare "not found".
+# `brew` is exempt: like `claude` below, it hands off to the real host binary instead of being
+# refused, since qsh already runs a native process for this build (it's not sandboxed like the
+# browser build), so there is no reason to fake a "can't run host programs" limitation for it.
 _HOST_ONLY_COMMANDS = {
-    "brew", "apt", "apt-get", "dpkg", "yum", "dnf", "pacman", "port",
+    "apt", "apt-get", "dpkg", "yum", "dnf", "pacman", "port",
     "pip", "pip3", "npm", "npx", "yarn", "pnpm", "cargo", "gem",
     "git", "docker", "sudo", "curl", "wget", "ssh",
 }
@@ -59,7 +62,7 @@ class Shell:
             "ls": self.cmd_ls, "cat": self.cmd_cat, "cd": self.cmd_cd, "pwd": self.cmd_pwd,
             "mkdir": self.cmd_mkdir, "rm": self.cmd_rm, "write": self.cmd_write, "tree": self.cmd_tree,
             "save": self.cmd_save, "sh": self.cmd_sh, "sync": self.cmd_sync,
-            "claude": self.cmd_claude,
+            "claude": self.cmd_claude, "brew": self.cmd_brew,
             "exit": self.cmd_exit, "quit": self.cmd_exit, "halt": self.cmd_exit,
         }
 
@@ -178,6 +181,7 @@ class Shell:
             ("apqb", "apqb <theta> | apqb --r <r> | apqb --a <latent> | apqb --p1 <prob>  [--K k]"),
             ("files", "ls cat cd pwd mkdir rm write <path> <text> tree save <pid|last> <path> exec <circuit.json> sh <script.qsh> sync"),
             ("external", "claude [args...]  -- hand off to the Claude Code CLI installed on the host (e.g. via Homebrew)"),
+            ("", "brew [args...]    -- hand off to the real Homebrew installed on the host"),
         ]
         for name, text in groups:
             self.out(f"  {name:<10} {text}")
@@ -536,3 +540,15 @@ class Shell:
         status = subprocess.call([exe, *args])
         if status:
             raise KernelError(f"claude exited with status {status}")
+
+    def cmd_brew(self, args: List[str]) -> None:
+        """Hand off to the real Homebrew (`brew`) installed on the host."""
+        exe = shutil.which("brew")
+        if exe is None:
+            raise KernelError(
+                "brew: command not found on PATH. Install Homebrew first "
+                "(see https://brew.sh), then restart qsh."
+            )
+        status = subprocess.call([exe, *args])
+        if status:
+            raise KernelError(f"brew exited with status {status}")
