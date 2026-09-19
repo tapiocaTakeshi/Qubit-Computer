@@ -248,13 +248,15 @@ class Kernel:
     # ------------------------------------------------------------ memory
     def sys_alloc(self, size: int, name: str = "", apqbs: Optional[Sequence[APQB]] = None,
                   owner: Optional[int] = None) -> Segment:
-        if size < 1:
-            raise KernelError("segment size must be >= 1")
+        if not isinstance(size, int) or isinstance(size, bool) or size < 1:
+            raise KernelError("segment size must be an integer >= 1")
         if size > len(self.free_qubits):
             raise KernelError(f"out of qubits: requested {size}, free {len(self.free_qubits)}")
+        if apqbs is not None and len(apqbs) != size:
+            raise KernelError(f"expected {size} initial APQBs, got {len(apqbs)}")
+        state = self._new_statevector(size, apqbs)
         qubits = self.free_qubits[:size]
         del self.free_qubits[:size]
-        state = self._new_statevector(size, apqbs)
         sid = self._next_sid
         self._next_sid += 1
         seg = Segment(sid, name or f"seg{sid}", qubits, state, owner)

@@ -49,7 +49,12 @@ export function complexSubsetFeatures(thetas: number[], K?: number): Map<string,
 /** eta = sqrt(1 - r^2 + eps) (Eq. 31). */
 export const uncertainty = (r: number, eps = 1e-6): number => Math.sqrt(Math.max(1 - r * r, 0) + eps);
 /** Monotone map eta -> [lo, hi] (Eq. 11 / 32). */
-export const controlSignal = (eta: number, lo: number, hi: number): number => lo + (hi - lo) * eta;
+export function controlSignal(eta: number, lo: number, hi: number): number {
+  if (![eta, lo, hi].every(Number.isFinite) || lo > hi) throw new Error('invalid control signal bounds');
+  // Eq. 31's epsilon can put eta slightly above 1; saturate only at the control boundary.
+  const t = Math.max(0, Math.min(1, eta));
+  return Math.max(lo, Math.min(hi, (1 - t) * lo + t * hi));
+}
 
 export type ActivationName = 'tanh' | 'identity' | 'sigmoid' | 'relu';
 const ACT: Record<ActivationName, (x: number) => number> = {
@@ -110,6 +115,7 @@ export class QBNNLayer {
   }
 
   forward(h: number[]): number[] {
+    if (h.length !== this.inDim || !h.every(Number.isFinite)) throw new Error(`expected ${this.inDim} finite inputs`);
     const r = h.map(Math.tanh);
     const a = this.W.map((row, j) => row.reduce((s, w, i) => s + w * h[i], 0) + this.b[j]);
     const q = a.map(Math.tanh);

@@ -145,6 +145,21 @@ describe('circuits and algorithms', () => {
 });
 
 describe('QBNN', () => {
+  test('regularized uncertainty stays within control bounds', () => {
+    expect(Q.controlSignal(Q.uncertainty(0), 0, 1)).toBe(1);
+    expect(Q.controlSignal(-0.1, 0.2, 0.8)).toBe(0.2);
+    for (const args of [[NaN, 0, 1], [0.5, 1, 0], [0.5, 0, Infinity]]) {
+      expect(() => Q.controlSignal(args[0], args[1], args[2])).toThrow();
+    }
+  });
+  test('invalid input dimensions and nonfinite values fail explicitly', () => {
+    for (const lam of [0, 1]) {
+      const layer = new Q.QBNNLayer(2, 1, 1, lam);
+      for (const h of [[1], [1, 2, 3], [NaN, 1], [Infinity, 1]]) {
+        expect(() => layer.forward(h)).toThrow('expected 2 finite inputs');
+      }
+    }
+  });
   test('subset features', () => {
     const r = [0.2, -0.5, 0.9, 0.1];
     expect(Q.subsetFeatures(r).size).toBe(16);

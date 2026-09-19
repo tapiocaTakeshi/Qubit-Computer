@@ -13,10 +13,17 @@ export interface VMResult {
   output: string[];
   halted: boolean;
 }
+/** Motherboard ports. Kernel-owned allocations share the OS's finite APQB pool. */
+export interface VMBus {
+  allocate(qubits: number): StateVector;
+  release(): void;
+  readWord(path: string): string;
+  writeWord(path: string, value: string): void;
+}
 type Instruction = { op: string; args: string[]; line: number };
 const ARITY: Record<string, number> = {
   MOV: 2, ADD: 2, SUB: 2, MUL: 2, DIV: 2, MOD: 2, LOAD: 2, STORE: 2,
-  JMP: 1, JNZ: 2, PRINT: 1, HALT: 0,
+  JMP: 1, JNZ: 2, PRINT: 1, HALT: 0, READ: 2, WRITE: 2,
   QALLOC: 1, QPREP: 2, QH: 1, QX: 1, QCX: 2, QMEASURE: 2, QFREE: 0,
 };
 
@@ -42,6 +49,22 @@ QMEASURE R1 1
 PRINT R0
 PRINT R1
 QFREE
+HALT
+`;
+
+export const PC_EXAMPLE = `# CPU + RAM + shared APQB + disk, all through QubitOS
+MOV R0 6
+MUL R0 7
+STORE 100 R0
+LOAD R1 100
+QALLOC 1
+QPREP 0 1.5707963267948966
+QMEASURE R2 0
+QFREE
+ADD R1 R2
+WRITE /home/user/Documents/pc-result.txt R1
+READ R3 /home/user/Documents/pc-result.txt
+PRINT R3
 HALT
 `;
 
@@ -77,11 +100,15 @@ export class VirtualMachine {
     this.wordBits = wordBits;
   }
 
-  run(source: string, seed?: number): VMResult {
-    const { code, labels } = assemble(source);
+  reset(): void {
     this.registers.fill(BigInt(0));
     this.memory.fill(BigInt(0));
     this.quantum = null;
+  }
+
+  run(source: string, seed?: number, bus?: VMBus): VMResult {
+    this.reset();
+    const { code, labels } = assemble(source);
     const rng = new Rng(seed);
     const output: string[] = [];
     let pc = 0, steps = 0, work = 0, halted = false;
@@ -111,6 +138,12 @@ export class VirtualMachine {
       if (work > 2000000) throw new Error('APQB operation budget exceeded');
       return this.quantum;
     };
+    const release = () => {
+      if (this.quantum) {
+        this.quantum = null;
+        bus?.release();
+      }
+    };
     try {
       while (!halted) {
         if (++steps > 20000) throw new Error('QVM instruction budget exceeded (20000)');
@@ -127,6 +160,16 @@ export class VirtualMachine {
             case 'MOD': put(a, value(a) % value(b)); break;
             case 'LOAD': put(a, this.memory[index(b, this.memory.length)]); break;
             case 'STORE': this.memory[index(a, this.memory.length)] = BigInt.asUintN(this.wordBits, value(b)); break;
+            case 'READ': {
+              reg(a);
+              if (!bus) throw new Error('READ requires a QubitOS storage bus');
+              const word = bus.readWord(b).trim();
+              if (!/^\d{1,20}$/.test(word) || BigInt(word) > BigInt('18446744073709551615')) throw new Error('file must contain one unsigned 64-bit decimal integer');
+              put(a, BigInt(word)); break;
+            }
+            case 'WRITE':
+              if (!bus) throw new Error('WRITE requires a QubitOS storage bus');
+              bus.writeWord(a, BigInt.asUintN(this.wordBits, value(b)).toString()); break;
             case 'JMP': pc = jump(a); break;
             case 'JNZ': if (value(a) !== BigInt(0)) pc = jump(b); break;
             case 'PRINT':
@@ -137,7 +180,9 @@ export class VirtualMachine {
               const n = Number(value(a));
               if (!Number.isInteger(n) || n < 1 || n > 12) throw new Error('QVM supports 1..12 simulated qubits');
               if (this.quantum) throw new Error('QFREE the current register first');
-              this.quantum = new StateVector(n); break;
+              work += 2 ** n;
+              if (work > 2000000) throw new Error('APQB operation budget exceeded');
+              this.quantum = bus ? bus.allocate(n) : new StateVector(n); break;
             }
             case 'QPREP': {
               const sv = state();
@@ -156,13 +201,13 @@ export class VirtualMachine {
             case 'QMEASURE': {
               const sv = state(); reg(a); put(a, BigInt(sv.measure([index(b, sv.n)], rng, true))); break;
             }
-            case 'QFREE': this.quantum = null; break;
+            case 'QFREE': release(); break;
           }
         } catch (e) { throw new Error(`line ${ins.line}: ${(e as Error).message}`); }
       }
       return { wordBits: this.wordBits, steps, registers: this.registers.map(String), output, halted };
     } finally {
-      this.quantum = null;
+      release();
     }
   }
 }

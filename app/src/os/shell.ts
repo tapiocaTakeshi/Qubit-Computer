@@ -283,7 +283,7 @@ export class Shell {
     this.out('QubitOS qsh — Unix-style subset, not zsh or macOS');
     this.out('Pipelines: |   redirects: > >> <   conditions: && ||   quotes, $VAR, $?');
     this.out('Utilities: touch cp mv printf grep head tail wc sort uniq env export history which whoami true false');
-    this.out('Virtual CPU: qvm <file.qasm> [32|64]   Apps: open textedit | open calculator');
+    this.out('Virtual CPU: qvm <file.qasm> [64]   Hardware: hardware   Apps: open computer | open textedit | open calculator');
     for (const [g, t] of HELP_GROUPS) this.out(`  ${g.padEnd(10)} ${t}`);
     this.out('programs in /bin: ' + Object.keys(this.k.programs).sort().join(', '));
     this.out("angles accept 'pi' suffix (0.25pi). Bitstrings print qubit 0 on the left.");
@@ -335,10 +335,12 @@ export class Shell {
     this.out(`${h.motherboard.name}: ${h.motherboard.bus}`);
     this.out(`cpu: ${h.cpu.name} ${h.cpu.bits}-bit — ${h.cpu.role}`);
     this.out(`ram: ${h.ram.allocatedQubits}/${h.ram.totalQubits} APQB qubits allocated`);
-    this.out(`gpu_npu: ${h.gpuNpu.name}, ${h.gpuNpu.lanes} lanes, backend=${h.gpuNpu.backend}`);
+    this.out(`cpu RAM: ${h.ram.byteLength} bytes, ${h.ram.nonzeroWords} nonzero words; runs=${h.cpu.runs}`);
+    this.out(`gpu_npu: backend=${h.gpuNpu.backend}; ${h.gpuNpu.detail}`);
     this.out(`ssd: ${h.ssd.usedBytes}/${h.ssd.capacityBytes} bytes in QubitFS`);
-    this.out(`power: ${h.power.watts.toFixed(1)} W, CPU ${h.power.cpuTempC.toFixed(1)} °C, fan ${h.cooling.fanPercent.toFixed(0)}%`);
+    this.out(`power / cooling: ${h.power.status}`);
     this.out(`network: ${h.network.join(', ')}`);
+    this.out(`sound: ${h.sound}`);
   }
 
   private cmdMotd(): void {
