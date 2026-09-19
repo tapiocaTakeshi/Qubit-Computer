@@ -53,6 +53,7 @@ class Shell:
             "help": self.cmd_help, "?": self.cmd_help, "uname": self.cmd_uname, "uptime": self.cmd_uptime,
             "dmesg": self.cmd_dmesg, "sysctl": self.cmd_sysctl, "echo": self.cmd_echo, "motd": self.cmd_motd,
             "backend": self.cmd_backend,
+            "hardware": self.cmd_hardware,
             "run": self.cmd_run, "spawn": self.cmd_spawn, "sched": self.cmd_sched, "ps": self.cmd_ps,
             "kill": self.cmd_kill, "log": self.cmd_log, "result": self.cmd_result, "draw": self.cmd_draw,
             "alloc": self.cmd_alloc, "free": self.cmd_free, "mem": self.cmd_mem, "regs": self.cmd_mem,
@@ -174,7 +175,7 @@ class Shell:
     def cmd_help(self, args: List[str]) -> None:
         self.out("QubitOS shell (qsh) commands:")
         groups = [
-            ("system", "help uname uptime dmesg sysctl [key [value]] backend [cpu|gpu|qnpu] motd echo exit"),
+            ("system", "help uname uptime dmesg sysctl [key [value]] backend [cpu|gpu|qnpu] hardware motd echo exit"),
             ("processes", "run <prog> [args] [--shots N --seed S --prio P] | spawn <prog> [args] | sched | ps | kill <pid> | log <pid> | result <pid|last> | draw <prog> [args]"),
             ("memory", "alloc <n> [--name x --theta t1,t2,.. | --r r1,r2,..] | free <sid> | mem | reset <sid>"),
             ("registers", "gate <sid> <gate> <q..> [--p a,b] | measure <sid> [q..] [--shots N] | readout <sid> | state <sid> | ent <sid|last|pid>"),
@@ -187,6 +188,16 @@ class Shell:
             self.out(f"  {name:<10} {text}")
         self.out("programs in /bin: " + ", ".join(sorted(self.k.programs)))
         self.out("angles accept 'pi' suffix (0.25pi). Bitstrings print qubit 0 on the left.")
+
+    def cmd_hardware(self, args: List[str]) -> None:
+        if args:
+            raise ValueError("usage: hardware")
+        report = self.k.sys_hardware()
+        for name in ("motherboard", "cpu", "ram", "gpu_npu", "ssd", "power", "cooling"):
+            item = report[name]
+            self.out(f"{name}: " + ", ".join(f"{k}={v}" for k, v in item.items()))
+        self.out("network: " + ", ".join(report["network"]))
+        self.out("sound: " + report["sound"])
 
     def cmd_uname(self, args: List[str]) -> None:
         u = self.k.sys_uname()

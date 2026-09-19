@@ -91,7 +91,7 @@ export class Shell {
     this.out = out;
     this.commands = {
       help: (a) => this.cmdHelp(a), '?': (a) => this.cmdHelp(a), uname: () => this.cmdUname(), uptime: () => this.cmdUptime(),
-      dmesg: (a) => this.cmdDmesg(a), sysctl: (a) => this.cmdSysctl(a), backend: (a) => this.cmdBackend(a), echo: (a) => this.out(a.join(' ')), motd: () => this.cmdMotd(),
+      dmesg: (a) => this.cmdDmesg(a), sysctl: (a) => this.cmdSysctl(a), backend: (a) => this.cmdBackend(a), hardware: (a) => this.cmdHardware(a), echo: (a) => this.out(a.join(' ')), motd: () => this.cmdMotd(),
       clear: () => this.onClear?.(),
       run: (a) => this.cmdRun(a), spawn: (a) => this.cmdSpawn(a), sched: (a) => this.cmdSched(a), ps: () => this.cmdPs(),
       kill: (a) => this.cmdKill(a), log: (a) => this.cmdLog(a), result: (a) => this.cmdResult(a), draw: (a) => this.cmdDraw(a),
@@ -327,6 +327,18 @@ export class Shell {
       return;
     }
     this.out(`backend = ${this.k.sysBackend(a[0])}`);
+  }
+
+  private cmdHardware(a: string[]): void {
+    if (a.length) throw new Error('usage: hardware');
+    const h = this.k.sysHardware();
+    this.out(`${h.motherboard.name}: ${h.motherboard.bus}`);
+    this.out(`cpu: ${h.cpu.name} ${h.cpu.bits}-bit — ${h.cpu.role}`);
+    this.out(`ram: ${h.ram.allocatedQubits}/${h.ram.totalQubits} APQB qubits allocated`);
+    this.out(`gpu_npu: ${h.gpuNpu.name}, ${h.gpuNpu.lanes} lanes, backend=${h.gpuNpu.backend}`);
+    this.out(`ssd: ${h.ssd.usedBytes}/${h.ssd.capacityBytes} bytes in QubitFS`);
+    this.out(`power: ${h.power.watts.toFixed(1)} W, CPU ${h.power.cpuTempC.toFixed(1)} °C, fan ${h.cooling.fanPercent.toFixed(0)}%`);
+    this.out(`network: ${h.network.join(', ')}`);
   }
 
   private cmdMotd(): void {

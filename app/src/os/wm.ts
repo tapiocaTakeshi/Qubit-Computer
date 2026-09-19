@@ -7,7 +7,7 @@
  */
 import { Kernel, Process } from './kernel';
 
-export type BuiltinAppId = 'textedit' | 'calculator' | 'terminal' | 'finder' | 'programs' | 'memory' | 'apqb' | 'activity' | 'settings' | 'qbnn' | 'store' | 'browser';
+export type BuiltinAppId = 'textedit' | 'calculator' | 'terminal' | 'computer' | 'finder' | 'programs' | 'memory' | 'apqb' | 'activity' | 'settings' | 'qbnn' | 'store' | 'browser';
 /** Built-in app id, or `app:<name>` for an installed package. */
 export type AppId = BuiltinAppId | `app:${string}`;
 
@@ -23,6 +23,7 @@ export const APPS: Record<BuiltinAppId, AppInfo> = {
   textedit: { id: 'textedit', title: 'TextEdit', icon: '✎', description: 'Documents and QVM programs', defaultSize: { w: 620, h: 620 } },
   calculator: { id: 'calculator', title: 'Calculator', icon: '±', description: 'Arithmetic with saved history', defaultSize: { w: 350, h: 580 } },
   terminal: { id: 'terminal', title: 'Terminal', icon: '>_', description: 'qsh shell', defaultSize: { w: 560, h: 520 } },
+  computer: { id: 'computer', title: 'APQB Computer', icon: '⌘', description: 'Motherboard, CPU, RAM, GPU, SSD and cooling', defaultSize: { w: 520, h: 620 } },
   finder: { id: 'finder', title: 'Finder', icon: '🗂', description: 'QubitFS browser', defaultSize: { w: 520, h: 480 } },
   programs: { id: 'programs', title: 'Programs', icon: '▶', description: 'Run circuits and jobs', defaultSize: { w: 560, h: 620 } },
   memory: { id: 'memory', title: 'Qubit Memory', icon: '▦', description: 'APQB registers', defaultSize: { w: 560, h: 620 } },
@@ -34,7 +35,7 @@ export const APPS: Record<BuiltinAppId, AppInfo> = {
   browser: { id: 'browser', title: 'Browser', icon: '◎', description: 'Open web pages and web apps', defaultSize: { w: 720, h: 600 } },
 };
 
-export const APP_ORDER: BuiltinAppId[] = ['finder', 'terminal', 'textedit', 'calculator', 'browser', 'store', 'programs', 'memory', 'apqb', 'qbnn', 'activity', 'settings'];
+export const APP_ORDER: BuiltinAppId[] = ['finder', 'terminal', 'computer', 'textedit', 'calculator', 'browser', 'store', 'programs', 'memory', 'apqb', 'qbnn', 'activity', 'settings'];
 
 export const isBuiltinApp = (id: string): id is BuiltinAppId => Object.hasOwn(APPS, id);
 

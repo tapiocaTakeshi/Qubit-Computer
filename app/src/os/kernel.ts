@@ -16,6 +16,7 @@ import { NetStack } from './net';
 import { DEFAULT_REGISTRIES, PackageManager } from './pkg';
 import { PROGRAMS, Program, programKind } from './programs';
 import { WebInstaller } from './webinstall';
+import { APQBPersonalComputer } from './hardware';
 import { KernelError, entanglementOf, isResult } from './util';
 import type { WindowManager } from './wm';
 
@@ -115,6 +116,8 @@ export class Kernel {
   webInstall: WebInstaller;
   backendInfo: BackendInfo;
   readonly bootReport: VMResult;
+  /** The assembled motherboard, CPU, APQB-RAM, GPU/NPU, SSD, PSU and cooling model. */
+  pc: APQBPersonalComputer;
 
   constructor(opts: KernelOptions = {}) {
     this.bootReport = new VirtualMachine(64).run(BOOT_ROM, 0);
@@ -126,6 +129,7 @@ export class Kernel {
     this.backendInfo = resolveBackend(opts.backend ?? 'cpu', (msg) => this.log(msg));
     this.hw = new QubitComputer(numQubits);
     this.numQubits = numQubits;
+    this.pc = new APQBPersonalComputer(numQubits);
     this.fs = new QubitFS(opts.fsSnapshot);
     this.rng = new Rng(opts.seed);
     this.seed = opts.seed;
@@ -182,6 +186,10 @@ export class Kernel {
 
   sysUname() {
     return { os: OS_NAME, version: OS_VERSION, hardware: 'APQB state-vector', backend: this.backendInfo.name, numQubits: this.numQubits, uptimeMs: Date.now() - this.bootTime, programs: Object.keys(this.programs).sort() };
+  }
+
+  sysHardware() {
+    return this.pc.report(this);
   }
 
   // ------------------------------------------------------------ backend

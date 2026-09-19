@@ -4,6 +4,8 @@
 
 スマホ版には独自 QVM32/QVM64、APQB 命令、起動時セルフテスト、Unix 風 qsh、TextEdit、Calculator を実装しています。[スマホ版の使い方・命令仕様・互換性](docs/MOBILE_COMPUTER.md) を参照してください。macOS / zsh の完全互換や Mac アプリのバイナリ実行は提供しません。
 
+**APQB Personal Computer** では、マザーボード・64-bit APQB CPU・APQB RAM・GPU/NPU・QubitFS SSD・電源・冷却・ネットワークをQubitOSの動作する仮想部品として組み立てています。スマホ版のDockから **APQB Computer** を開くか、Python版のqshで `hardware` を実行すると、部品と実行時状態を確認できます。APQBは古典シミュレータであり、ここでいう部品も物理量子ハードウェアではありません。
+
 Python 版は依存ライブラリなしの純 Python 実装です（Python 3.9+）。スマホ版は `app/` の TypeScript / Expo 実装です。[Qubit](https://github.com/tapiocaTakeshi/Qubit) リポジトリの APQB / QBNN 理論（`apqb_qbnn_v2.py`、および改訂論文 *「調整可能擬似量子ビット（APQB）に基づく量子インスパイア多重線形ニューラルネットワーク」v2*）の数式をそのまま実装し、数値的に検証しています。
 
 ```text
@@ -27,6 +29,7 @@ r² + η² = 1                                                 (Eq. 9)
 │  QubitFS         /bin /etc /home /lib /var  (JSON で永続化可)       │
 │  プログラム      bell, ghz, teleport, grover, qft, qbnn_train ...   │
 ├──────────────────────── Qubit Computer (HW) ──────────────────────┤
+│  APQB-PC        MB64 / CPU64 / APQB-RAM / GPU-NPU / SSD / PSU / fan │
 │  APQB            θ ↔ r ↔ η ↔ z=e^{i2θ}, tanh/sech 潜在パラメータ   │
 │  ゲート          X Y Z H S T RX RY RZ U CX CZ SWAP CCX ... + APQB(θ)│
 │  状態ベクトル    2^n 複素振幅, Born 測定, 部分トレース → APQB 読み出し│
