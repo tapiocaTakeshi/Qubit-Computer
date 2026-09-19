@@ -32,6 +32,10 @@ class QubitComputer < Formula
         qubitos -c "run bell"          run a command and exit
         qubitos --fs ~/.qubitos.json   keep QubitFS between sessions
 
+      Inside qsh, the `claude` command hands off to the Claude Code CLI, if you also
+      have it installed (e.g. `brew install claude-code`):
+        qubitos:/$ claude -p "explain this repo"
+
       The desktop version of QubitOS is a separate download; see the project README.
     EOS
   end

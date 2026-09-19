@@ -3,6 +3,7 @@ import math
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 from qubit_computer.os import Kernel, KernelError, ProcState, QubitFS, Shell, boot
 from qubit_computer.os.boot import main
@@ -158,6 +159,27 @@ class TestShell(unittest.TestCase):
     def test_semicolons_and_quotes(self):
         sh, cap = self.run_cmds(['echo "a; b"; echo c'])
         self.assertEqual(cap.lines, ["a; b", "c"])
+
+    def test_claude_not_found(self):
+        with mock.patch("qubit_computer.os.shell.shutil.which", return_value=None):
+            sh, cap = self.run_cmds(["claude --version"])
+        self.assertEqual(sh.last_status, 1)
+        self.assertIn("claude: command not found", cap.text)
+        self.assertIn("brew install claude-code", cap.text)
+
+    def test_claude_handoff(self):
+        with mock.patch("qubit_computer.os.shell.shutil.which", return_value="/opt/homebrew/bin/claude"), \
+                mock.patch("qubit_computer.os.shell.subprocess.call", return_value=0) as call:
+            sh, cap = self.run_cmds(["claude -p hello"])
+        call.assert_called_once_with(["/opt/homebrew/bin/claude", "-p", "hello"])
+        self.assertEqual(sh.last_status, 0)
+
+    def test_claude_nonzero_exit(self):
+        with mock.patch("qubit_computer.os.shell.shutil.which", return_value="/usr/bin/claude"), \
+                mock.patch("qubit_computer.os.shell.subprocess.call", return_value=2):
+            sh, cap = self.run_cmds(["claude"])
+        self.assertEqual(sh.last_status, 1)
+        self.assertIn("claude exited with status 2", cap.text)
 
 
 class TestBoot(unittest.TestCase):

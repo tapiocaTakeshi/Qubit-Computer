@@ -204,9 +204,26 @@ memory     alloc <n> [--name x --theta t1,t2 | --r r1,r2 | --a a1,a2] | free <si
 registers  gate <sid> <gate> <q..> [--p a,b] | measure <sid> [q..] [--shots N] | readout <sid> | state <sid> | ent <sid|last|pid>
 apqb       apqb <theta> | apqb --r <r> | apqb --a <latent> | apqb --p1 <prob>
 files      ls cat cd pwd mkdir rm write tree save <pid|last> <path> exec <circuit.json> sh <script.qsh> sync
+external   claude [args...]   -- ホストにインストール済みの Claude Code CLI を起動（例: Homebrew でインストール）
 ```
 
 角度は `0.25pi` のように `pi` 接尾辞が使えます。ビット列は **量子ビット 0 を左端** に表示します。
+
+### qsh から Claude Code を使う
+
+`claude` コマンドは qsh からホスト OS の Claude Code CLI（`claude`）をそのまま起動します。事前に
+Homebrew などで Claude Code をインストールし、`claude` が `PATH` に通っている必要があります。
+
+```bash
+brew install claude-code   # 未インストールの場合。他のインストール方法は https://claude.com/claude-code
+```
+
+```text
+qubitos:/$ claude -p "このリポジトリの APQB とは何か説明して"
+```
+
+`claude` が見つからない場合は qsh がインストール方法を案内するエラーを表示します。終了すると
+そのまま qsh のプロンプトに戻ります。
 
 ### セッション例
 
