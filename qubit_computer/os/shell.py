@@ -24,6 +24,15 @@ from .programs import parse_args
 
 __all__ = ["Shell"]
 
+# Package managers and other host-only tools a new user might type expecting a real terminal.
+# qsh is QubitOS's own virtual shell (kernel syscalls, not a host process), so these can never
+# work here -- point the user back to their host terminal instead of a bare "not found".
+_HOST_ONLY_COMMANDS = {
+    "brew", "apt", "apt-get", "dpkg", "yum", "dnf", "pacman", "port",
+    "pip", "pip3", "npm", "npx", "yarn", "pnpm", "cargo", "gem",
+    "git", "docker", "sudo", "curl", "wget", "ssh",
+}
+
 
 def _num(s: str) -> float:
     if s.endswith("pi"):
@@ -76,7 +85,15 @@ class Shell:
             if fn is None and name in self.k.programs:
                 fn, args = self.cmd_run, [name] + args
             if fn is None:
-                self.out(f"qsh: command not found: {name} (try 'help')")
+                if name in _HOST_ONLY_COMMANDS:
+                    self.out(
+                        f"qsh: command not found: {name} -- qsh is QubitOS's own virtual shell, "
+                        f"not your host terminal, so it can't run host programs like `{name}`. "
+                        f"Install/run it in the terminal you used *before* starting `qubitos` "
+                        f"(try 'help' for what qsh itself supports)."
+                    )
+                else:
+                    self.out(f"qsh: command not found: {name} (try 'help')")
                 self.last_status = 127
                 continue
             try:

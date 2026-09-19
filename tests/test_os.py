@@ -132,6 +132,13 @@ class TestShell(unittest.TestCase):
     def test_unknown_command_status(self):
         sh, cap = self.run_cmds(["frobnicate"])
         self.assertEqual(sh.last_status, 127)
+        self.assertNotIn("host terminal", cap.text)
+
+    def test_host_only_command_hint(self):
+        sh, cap = self.run_cmds(["brew install qubit-computer"])
+        self.assertEqual(sh.last_status, 127)
+        self.assertIn("qsh is QubitOS's own virtual shell", cap.text)
+        self.assertIn("host terminal", cap.text)
 
     def test_register_workflow(self):
         sh, cap = self.run_cmds([
