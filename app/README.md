@@ -25,6 +25,7 @@ app/
 │   ├── pkg.ts               qpm パッケージマネージャ（レジストリ, インストール, /etc/apps.json）
 │   └── shell.ts             qsh シェル（open / windows / close / curl / wget / qpm を含む）
 ├── src/ui/                  デスクトップとアプリ
+│   ├── CrashScreen.tsx      未捕捉例外のフォールバック（RN既定の強制終了の代わりにエラー画面を表示）
 │   ├── Desktop.tsx          起動画面, メニューバー, ドラッグ可能なウィンドウ, ドック
 │   ├── TerminalScreen.tsx   Terminal（qsh, クイックコマンド, 履歴）
 │   ├── FinderApp.tsx        Finder（QubitFS ブラウザ, プレビュー, スクリプト実行, 回路実行）

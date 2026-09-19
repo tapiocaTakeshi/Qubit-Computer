@@ -1,8 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet } from 'react-native';
+import { clearCrash, CrashScreen, installGlobalErrorHandler, useCrash } from './src/ui/CrashScreen';
 import { Desktop } from './src/ui/Desktop';
 import { KernelProvider } from './src/ui/KernelContext';
+
+// Installed once, at module load, so it is in place before anything else in the app can throw.
+installGlobalErrorHandler();
 
 const WEB_FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap';
 
@@ -24,6 +28,15 @@ function useWebChrome() {
 /** QubitOS: the kernel boots, then the desktop (window manager, dock, menu bar) takes over. */
 export default function App() {
   useWebChrome();
+  const crash = useCrash();
+  if (crash) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar style="light" />
+        <CrashScreen error={crash} onReset={clearCrash} />
+      </SafeAreaView>
+    );
+  }
   return (
     <KernelProvider>
       <SafeAreaView style={styles.safe}>
