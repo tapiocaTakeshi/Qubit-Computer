@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import math
 import shlex
+import shutil
+import subprocess
 import sys
 from typing import Any, Callable, Dict, List, Optional
 
@@ -48,6 +50,7 @@ class Shell:
             "ls": self.cmd_ls, "cat": self.cmd_cat, "cd": self.cmd_cd, "pwd": self.cmd_pwd,
             "mkdir": self.cmd_mkdir, "rm": self.cmd_rm, "write": self.cmd_write, "tree": self.cmd_tree,
             "save": self.cmd_save, "sh": self.cmd_sh, "sync": self.cmd_sync,
+            "claude": self.cmd_claude,
             "exit": self.cmd_exit, "quit": self.cmd_exit, "halt": self.cmd_exit,
         }
 
@@ -157,6 +160,7 @@ class Shell:
             ("registers", "gate <sid> <gate> <q..> [--p a,b] | measure <sid> [q..] [--shots N] | readout <sid> | state <sid> | ent <sid|last|pid>"),
             ("apqb", "apqb <theta> | apqb --r <r> | apqb --a <latent> | apqb --p1 <prob>  [--K k]"),
             ("files", "ls cat cd pwd mkdir rm write <path> <text> tree save <pid|last> <path> exec <circuit.json> sh <script.qsh> sync"),
+            ("external", "claude [args...]  -- hand off to the Claude Code CLI installed on the host (e.g. via Homebrew)"),
         ]
         for name, text in groups:
             self.out(f"  {name:<10} {text}")
@@ -501,3 +505,17 @@ class Shell:
     def cmd_sync(self, args: List[str]) -> None:
         path = self.k.fs.sync()
         self.out(f"synced to {path}" if path else "in-memory filesystem (boot with --fs PATH to persist)")
+
+    # -------------------------------------------------------------- host
+    def cmd_claude(self, args: List[str]) -> None:
+        """Hand off to the Claude Code CLI (`claude`) installed on the host, e.g. via Homebrew."""
+        exe = shutil.which("claude")
+        if exe is None:
+            raise KernelError(
+                "claude: command not found on PATH. Install the Claude Code CLI first, e.g. "
+                "`brew install claude-code` (see https://claude.com/claude-code for other install "
+                "methods), then restart qsh."
+            )
+        status = subprocess.call([exe, *args])
+        if status:
+            raise KernelError(f"claude exited with status {status}")
