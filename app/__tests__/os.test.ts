@@ -278,6 +278,25 @@ describe('network and qpm', () => {
     await sh.pending;
     expect(lines[lines.length - 1]).toContain('not found');
   });
+  test('brew is a Homebrew-flavored alias for qpm', async () => {
+    const lines: string[] = [];
+    const k = new Kernel({ numQubits: 6, seed: 0 });
+    mockFetch(k);
+    const sh = new Shell(k, (l) => lines.push(l));
+    sh.executeLine('brew update; brew search lab');
+    await sh.pending;
+    expect(lines.join('\n')).toContain('bell-lab');
+    sh.executeLine('brew install bell-lab');
+    await sh.pending;
+    expect(k.fs.exists('/apps/bell-lab/main.qsh')).toBe(true);
+    expect(k.pkg.get('bell-lab')).toBeDefined();
+    sh.executeLine('brew list');
+    expect(lines.join('\n')).toContain('bell-lab');
+    sh.executeLine('brew uninstall bell-lab');
+    expect(k.pkg.get('bell-lab')).toBeUndefined();
+    expect(sh.executeLine('brew bogus')).toBe(1);
+    expect(lines[lines.length - 1]).toContain('usage: brew ');
+  });
   test('manifest validation rejects unsafe packages', () => {
     const k = new Kernel({ numQubits: 4, seed: 0 });
     expect(() => k.pkg.installManifest({ name: 'evil', version: '1', title: 'x', kind: 'script', main: '/etc/motd', files: { '/etc/motd': 'pwned' } })).toThrow(/\/apps\//);
