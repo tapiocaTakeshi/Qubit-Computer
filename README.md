@@ -76,6 +76,11 @@ qubitos
 [HomebrewFormula/qubit-computer.rb](HomebrewFormula/qubit-computer.rb) にあり、`brew upgrade --fetch-HEAD`
 で更新、`brew uninstall qubit-computer` で削除できます。
 
+> `brew` コマンドは**ホスト側の実際のターミナル**（`qubitos` を起動する前のシェル）で実行してください。
+> `qubitos` を起動した後の `qsh` プロンプト（`qubitos:/$`）は QubitOS 自身の仮想シェルで、ホストのプログラムは
+> 実行できません。`qsh` の中で `brew ...` と打つと `command not found` になります。また Homebrew が未インストール
+> の場合は先に https://brew.sh のインストーラーを実行してください。
+
 ### pip（ソースから）
 
 ```bash
