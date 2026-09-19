@@ -75,7 +75,11 @@ def uncertainty(r: float, eps: float = 1e-6) -> float:
 
 def control_signal(eta: float, lo: float, hi: float) -> float:
     """Monotone map eta -> [lo, hi], e.g. temperature (Eq. 11) or dropout (Eq. 32)."""
-    return lo + (hi - lo) * eta
+    if not all(math.isfinite(v) for v in (eta, lo, hi)) or lo > hi:
+        raise ValueError("invalid control signal bounds")
+    # Preserve Eq. 31; saturate its epsilon overshoot at the control boundary.
+    t = max(0.0, min(1.0, eta))
+    return max(lo, min(hi, (1.0 - t) * lo + t * hi))
 
 
 def _tanh(x: float) -> float:
@@ -133,6 +137,8 @@ class QBNNLayer:
 
     # ----------------------------------------------------------- forward
     def forward(self, h: Sequence[float]) -> List[float]:
+        if len(h) != self.in_dim or not all(math.isfinite(x) for x in h):
+            raise ValueError(f"expected {self.in_dim} finite inputs")
         r = [math.tanh(x) for x in h]                                   # (23)
         a = [sum(w * x for w, x in zip(row, h)) + bb for row, bb in zip(self.W, self.b)]  # (24)
         q = [math.tanh(x) for x in a]                                   # (25)

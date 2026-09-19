@@ -5,6 +5,20 @@ from qubit_computer import qbnn
 
 
 class TestQBNN(unittest.TestCase):
+    def test_control_bounds_with_regularized_uncertainty(self):
+        self.assertEqual(qbnn.control_signal(qbnn.uncertainty(0), 0, 1), 1)
+        self.assertEqual(qbnn.control_signal(-0.1, 0.2, 0.8), 0.2)
+        for args in ((math.nan, 0, 1), (0.5, 1, 0), (0.5, 0, math.inf)):
+            with self.assertRaises(ValueError):
+                qbnn.control_signal(*args)
+
+    def test_forward_rejects_invalid_inputs(self):
+        for lam in (0, 1):
+            layer = qbnn.QBNNLayer(2, 1, lam=lam)
+            for h in ([1], [1, 2, 3], [math.nan, 1], [math.inf, 1]):
+                with self.assertRaises(ValueError):
+                    layer.forward(h)
+
     def test_subset_feature_count_is_2_pow_n(self):
         r = [0.2, -0.5, 0.9, 0.1]
         self.assertEqual(len(qbnn.subset_features(r)), 16)
