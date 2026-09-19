@@ -76,10 +76,16 @@ qubitos
 [HomebrewFormula/qubit-computer.rb](HomebrewFormula/qubit-computer.rb) にあり、`brew upgrade --fetch-HEAD`
 で更新、`brew uninstall qubit-computer` で削除できます。
 
-> `brew` コマンドは**ホスト側の実際のターミナル**（`qubitos` を起動する前のシェル）で実行してください。
-> `qubitos` を起動した後の `qsh` プロンプト（`qubitos:/$`）は QubitOS 自身の仮想シェルで、ホストのプログラムは
-> 実行できません。`qsh` の中で `brew ...` と打つと `command not found` になります。また Homebrew が未インストール
-> の場合は先に https://brew.sh のインストーラーを実行してください。
+> 上記の `brew` コマンドは**ホスト側の実際のターミナル**（`qubitos` を起動する前のシェル）で実行してください。
+> `qubitos` を起動した後の `qsh` プロンプト（`qubitos:/$`）は QubitOS 自身の仮想シェルで、ホストの Homebrew は
+> 実行できません。Python 版 CLI の `qsh` の中で `brew ...` と打つと `command not found` になります。また
+> Homebrew が未インストールの場合は先に https://brew.sh のインストーラーを実行してください。
+>
+> Web アプリ（PWA）版の `qsh` には、この違いを埋めるために **`brew`** が QubitOS 自身のパッケージマネージャ
+> `qpm` のエイリアスとして組み込まれています。`brew install <name|url>` / `brew search [q]` / `brew list` /
+> `brew uninstall <name>` / `brew update` / `brew info <name>` で、`registry/` のアプリ（QubitOS スクリプト
+> パッケージ / Web アプリ）をブラウザの中だけで探して導入できます。ホストの実ファイルには触れないため、
+> ホスト側の実 Homebrew（上記）とは別物です。
 
 ### pip（ソースから）
 
@@ -326,7 +332,7 @@ Shell(kernel).execute_line("run teleport 0.7 --shots 1; ps")
 
 ## React Native アプリ（app/）
 
-同じ量子コンピュータと QubitOS を TypeScript に移植した **Expo / React Native アプリ**を `app/` に同梱しています。UI は QubitOS のデスクトップ環境（メニューバー・ドラッグ可能なウィンドウ・ドック）で、Terminal / Finder / Programs / Qubit Memory / APQB / QBNN Lab / Activity Monitor / System Settings をウィンドウとして開きます。各ウィンドウはカーネルのサービスプロセスとして `ps` / `kill` / `open` から扱え、仮想ファイルシステムは AsyncStorage に永続化されます。ネットワークスタックとパッケージマネージャ `qpm` を備え、App Store からこのリポジトリの `registry/` や任意の URL のアプリ（QubitOS スクリプトパッケージ / Web アプリ）をインターネット経由でインストールできます。
+同じ量子コンピュータと QubitOS を TypeScript に移植した **Expo / React Native アプリ**を `app/` に同梱しています。UI は QubitOS のデスクトップ環境（メニューバー・ドラッグ可能なウィンドウ・ドック）で、Terminal / Finder / Programs / Qubit Memory / APQB / QBNN Lab / Activity Monitor / System Settings をウィンドウとして開きます。各ウィンドウはカーネルのサービスプロセスとして `ps` / `kill` / `open` から扱え、仮想ファイルシステムは AsyncStorage に永続化されます。ネットワークスタックとパッケージマネージャ `qpm`（`qsh` では `brew` としても呼べます）を備え、App Store からこのリポジトリの `registry/` や任意の URL のアプリ（QubitOS スクリプトパッケージ / Web アプリ）をインターネット経由でインストールできます。
 
 ```bash
 cd app && npm install

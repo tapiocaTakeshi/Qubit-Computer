@@ -65,7 +65,7 @@ export const HELP_GROUPS: Array<[string, string]> = [
   ['apqb', 'apqb <theta> | apqb --r <r> | apqb --a <latent> | apqb --p1 <prob>  [--K k]'],
   ['files', 'ls cat cd pwd mkdir rm write <path> <text> tree save <pid|last> <path> exec <circuit.json> sh <script.qsh>'],
   ['desktop', 'open <app|path|url> | windows | close <window id|app>   apps: ' + APP_ORDER.join(' ')],
-  ['network', 'curl <url> | wget <url> <path> | qpm update | qpm search [q] | qpm install <name|url> | qpm remove <name> | qpm list'],
+  ['network', 'curl <url> | wget <url> <path> | qpm update | qpm search [q] | qpm install <name|url> | qpm remove <name> | qpm list   (qpm is also aliased as brew)'],
   ['this app', 'install [--status]   # install QubitOS itself on this device (web build)'],
 ];
 
@@ -73,7 +73,7 @@ export class Shell {
   k: Kernel;
   out: Out;
   lastStatus = 0;
-  /** Promise of the most recent asynchronous command (curl, wget, qpm, open <url>). */
+  /** Promise of the most recent asynchronous command (curl, wget, qpm/brew, open <url>). */
   pending: Promise<void> = Promise.resolve();
   env: Record<string, string> = { HOME: '/home/user', USER: 'user', SHELL: '/bin/qsh', PATH: '/bin', TERM: 'qsh' };
   writeRaw = (text: string): void => this.out(text.replace(/\n$/, ''));
@@ -104,6 +104,7 @@ export class Shell {
       save: (a) => this.cmdSave(a), sh: (a) => this.cmdSh(a),
       open: (a) => this.cmdOpen(a), windows: () => this.cmdWindows(), close: (a) => this.cmdClose(a),
       curl: (a) => this.cmdCurl(a), wget: (a) => this.cmdWget(a), qpm: (a) => this.cmdQpm(a),
+      brew: (a) => this.cmdQpm(a, 'brew'),
       install: (a) => this.cmdInstall(a),
     };
     Object.assign(this.commands, unixCommands(this));
@@ -642,7 +643,8 @@ export class Shell {
     });
   }
 
-  private cmdQpm(a: string[]): void {
+  /** qpm; also reachable as `brew` (name), since users expect Homebrew-style install/search/list/remove. */
+  private cmdQpm(a: string[], name = 'qpm'): void {
     const [sub, ...rest] = a;
     const pkg = this.k.pkg;
     switch (sub) {
@@ -668,7 +670,7 @@ export class Shell {
         });
         return;
       case 'install':
-        if (!rest.length) throw new Error('usage: qpm install <name|url>');
+        if (!rest.length) throw new Error(`usage: ${name} install <name|url>`);
         this.async(async () => {
           for (const target of rest) {
             const app = await pkg.install(target);
@@ -680,7 +682,7 @@ export class Shell {
         return;
       case 'remove':
       case 'uninstall':
-        if (!rest.length) throw new Error('usage: qpm remove <name>');
+        if (!rest.length) throw new Error(`usage: ${name} remove <name>`);
         for (const name of rest) {
           pkg.remove(name);
           this.out(`removed ${name}`);
@@ -693,7 +695,7 @@ export class Shell {
         return;
       }
       default:
-        throw new Error('usage: qpm update | search [q] | install <name|url> | remove <name> | list | info <name>');
+        throw new Error(`usage: ${name} update | search [q] | install <name|url> | remove <name> | list | info <name>`);
     }
   }
 
