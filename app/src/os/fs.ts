@@ -6,6 +6,16 @@ export interface FSDir {
 
 export class FSError extends Error {}
 
+/** UTF-8 size without a TextEncoder dependency (also works on native Hermes). */
+export function utf8Bytes(text: string): number {
+  let bytes = 0;
+  for (const ch of text) {
+    const c = ch.codePointAt(0)!;
+    bytes += c <= 0x7f ? 1 : c <= 0x7ff ? 2 : c <= 0xffff ? 3 : 4;
+  }
+  return bytes;
+}
+
 const normalize = (path: string): string => {
   const parts: string[] = [];
   for (const p of path.split('/')) {
@@ -16,14 +26,17 @@ const normalize = (path: string): string => {
       parts.push(p);
     }
   }
+  if (parts.length > 64) throw new FSError('path nesting limit exceeded');
   return '/' + parts.join('/');
 };
 
 export class QubitFS {
   root: FSDir = {};
   cwd = '/';
+  onChange?: () => void;
 
-  constructor(snapshot?: FSDir) {
+  constructor(snapshot?: FSDir, readonly capacityBytes = 64 * 1024 * 1024) {
+    if (!Number.isSafeInteger(capacityBytes) || capacityBytes < 2) throw new FSError('invalid storage capacity');
     if (snapshot) {
       const validate = (node: unknown, depth = 0): void => {
         if (typeof node === 'string') return;
@@ -35,8 +48,22 @@ export class QubitFS {
       };
       validate(snapshot);
       this.root = JSON.parse(JSON.stringify(snapshot)) as FSDir;
+      if (this.usedBytes > capacityBytes) throw new FSError('saved filesystem exceeds configured capacity');
     }
     else this.populateDefaults();
+  }
+
+  get usedBytes(): number { return utf8Bytes(this.snapshot()); }
+
+  /** Commit a mutation atomically, including directory metadata in the quota. */
+  private mutate(action: () => void): void {
+    const previous = this.root;
+    this.root = JSON.parse(JSON.stringify(previous)) as FSDir;
+    try {
+      action();
+      if (this.usedBytes > this.capacityBytes) throw new FSError('QubitFS disk full');
+    } catch (e) { this.root = previous; throw e; }
+    this.onChange?.();
   }
 
   resolve(path: string): string {
@@ -93,20 +120,24 @@ export class QubitFS {
   }
 
   mkdir(path: string, parents = true): void {
-    const [parent, name] = this.walk(path, parents);
-    if (!name) return;
-    if (name in parent) {
-      if (typeof parent[name] !== 'string') return;
-      throw new FSError(`file exists: ${path}`);
-    }
-    parent[name] = {};
+    this.mutate(() => {
+      const [parent, name] = this.walk(path, parents);
+      if (!name) return;
+      if (name in parent) {
+        if (typeof parent[name] !== 'string') return;
+        throw new FSError(`file exists: ${path}`);
+      }
+      parent[name] = {};
+    });
   }
 
   write(path: string, text: string, append = false): void {
-    const [parent, name] = this.walk(path, true);
-    if (!name) throw new FSError('cannot write to /');
-    if (name in parent && typeof parent[name] !== 'string') throw new FSError(`is a directory: ${path}`);
-    parent[name] = append && name in parent ? (parent[name] as string) + text : text;
+    this.mutate(() => {
+      const [parent, name] = this.walk(path, true);
+      if (!name) throw new FSError('cannot write to /');
+      if (name in parent && typeof parent[name] !== 'string') throw new FSError(`is a directory: ${path}`);
+      parent[name] = append && name in parent ? (parent[name] as string) + text : text;
+    });
   }
 
   read(path: string): string {
@@ -124,12 +155,14 @@ export class QubitFS {
   }
 
   rm(path: string, recursive = false): void {
-    const [parent, name] = this.walk(path);
-    if (!name) throw new FSError('cannot remove /');
-    if (!(name in parent)) throw new FSError(`no such file or directory: ${path}`);
-    const n = parent[name];
-    if (typeof n !== 'string' && Object.keys(n).length && !recursive) throw new FSError(`directory not empty: ${path}`);
-    delete parent[name];
+    this.mutate(() => {
+      const [parent, name] = this.walk(path);
+      if (!name) throw new FSError('cannot remove /');
+      if (!(name in parent)) throw new FSError(`no such file or directory: ${path}`);
+      const n = parent[name];
+      if (typeof n !== 'string' && Object.keys(n).length && !recursive) throw new FSError(`directory not empty: ${path}`);
+      delete parent[name];
+    });
   }
 
   cd(path: string): string {

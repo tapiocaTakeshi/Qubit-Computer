@@ -2,9 +2,11 @@
 
 **APQB（Adjustable Pseudo Quantum Bit：調整可能擬似量子ビット）の古典シミュレータと、スマホ上で動くホスト型デスクトップ QubitOS。**
 
-スマホ版には独自 QVM32/QVM64、APQB 命令、起動時セルフテスト、Unix 風 qsh、TextEdit、Calculator を実装しています。[スマホ版の使い方・命令仕様・互換性](docs/MOBILE_COMPUTER.md) を参照してください。macOS / zsh の完全互換や Mac アプリのバイナリ実行は提供しません。
+スマホ版には独自 QVM64、APQB 命令、起動時セルフテスト、Unix 風 qsh、TextEdit、Calculator を実装しています。[スマホ版の使い方・命令仕様・互換性](docs/MOBILE_COMPUTER.md) を参照してください。macOS / zsh の完全互換や Mac アプリのバイナリ実行は提供しません。
 
-**APQB Personal Computer** では、マザーボード・64-bit APQB CPU・APQB RAM・GPU/NPU・QubitFS SSD・電源・冷却・ネットワークをQubitOSの動作する仮想部品として組み立てています。スマホ版のDockから **APQB Computer** を開くか、Python版のqshで `hardware` を実行すると、部品と実行時状態を確認できます。APQBは古典シミュレータであり、ここでいう部品も物理量子ハードウェアではありません。
+**APQB Personal Computer** のスマホ版では、QVM64 CPU・4096ワードRAM・共有APQBメモリ・QubitFSを実際に接続しています。`qvm /home/user/Examples/pc-check.qasm` で演算・RAM・APQB測定・ファイル書込/読込を通し、結果 `43` を Documents/pc-result.txt に保存できます。Dockの **APQB Computer** または `hardware` で実行状態を確認できます。Python版の `hardware` はPythonサービス一覧で、QVM CPUはありません。
+
+実GPU/NPU演算、音声デバイス、Wi-Fi/Bluetoothドライバ、電源・冷却制御は未実装です。以前表示した256レーン・温度・電力・ファン値は実測や実デバイスではなかったため削除しました。QubitOS本体はホストのJavaScript/Pythonで実行され、QVM上でOS全体を起動するベアメタルPCではありません。[実装範囲と検証](docs/PC_AUDIT.md) を参照してください。
 
 Python 版は依存ライブラリなしの純 Python 実装です（Python 3.9+）。スマホ版は `app/` の TypeScript / Expo 実装です。[Qubit](https://github.com/tapiocaTakeshi/Qubit) リポジトリの APQB / QBNN 理論（`apqb_qbnn_v2.py`、および改訂論文 *「調整可能擬似量子ビット（APQB）に基づく量子インスパイア多重線形ニューラルネットワーク」v2*）の数式をそのまま実装し、数値的に検証しています。
 
@@ -25,11 +27,11 @@ r² + η² = 1                                                 (Eq. 9)
 ┌──────────────────────────── QubitOS ─────────────────────────────┐
 │  qsh シェル      run / alloc / gate / measure / readout / ent ...  │
 │  カーネル        syscalls・プロセス表・APQB スケジューラ・dmesg    │
-│  メモリ管理      物理量子ビットのプール → セグメント(APQB レジスタ) │
+│  メモリ管理      擬似量子ビットのプール → セグメント(APQB レジスタ) │
 │  QubitFS         /bin /etc /home /lib /var  (JSON で永続化可)       │
 │  プログラム      bell, ghz, teleport, grover, qft, qbnn_train ...   │
 ├──────────────────────── Qubit Computer (HW) ──────────────────────┤
-│  APQB-PC        MB64 / CPU64 / APQB-RAM / GPU-NPU / SSD / PSU / fan │
+│  スマホAPQB-PC   QVM64 / ワードRAM / APQBプール / QubitFS          │
 │  APQB            θ ↔ r ↔ η ↔ z=e^{i2θ}, tanh/sech 潜在パラメータ   │
 │  ゲート          X Y Z H S T RX RY RZ U CX CZ SWAP CCX ... + APQB(θ)│
 │  状態ベクトル    2^n 複素振幅, Born 測定, 部分トレース → APQB 読み出し│
@@ -108,7 +110,7 @@ qubitos --fs ~/.qubitos.json  # 仮想ファイルシステムを永続化
 python -m qubit_computer      # 同じ
 ```
 
-起動時のオプション：`-q/--qubits N`（物理量子ビット数、既定 16）、`--seed`、`--theta`（システム APQB の角度）、`--backend cpu|gpu|qnpu`（既定 `cpu`、詳細は後述）、`--quiet`。
+起動時のオプション：`-q/--qubits N`（擬似量子ビット数、既定 16）、`--seed`、`--theta`（システム APQB の角度）、`--backend cpu|gpu|qnpu`（既定 `cpu`、詳細は後述）、`--quiet`。
 
 ### Web アプリ（PWA）
 
@@ -149,7 +151,7 @@ Terminal の `install` コマンドのいずれからでもインストールで
 
 ### メモリ管理
 
-物理量子ビットは有限のプール（既定 16）です。`alloc n` は連続した量子ビットを **セグメント**（独立した APQB レジスタ）として切り出し、`--theta` / `--r` / `--a` で初期 APQB 状態を指定できます。セグメントは状態ベクトルとして生きており、`gate` でゲートを 1 つずつ適用し、`measure` で収縮させ、`readout` で各量子ビットの r / η / θ / エントロピーを読み出せます。
+擬似量子ビットは有限のプール（既定 16）です。`alloc n` は連続した量子ビットを **セグメント**（独立した APQB レジスタ）として切り出し、`--theta` / `--r` / `--a` で初期 APQB 状態を指定できます。セグメントは状態ベクトルとして生きており、`gate` でゲートを 1 つずつ適用し、`measure` で収縮させ、`readout` で各量子ビットの r / η / θ / エントロピーを読み出せます。
 
 ### APQB スケジューラ
 
@@ -177,7 +179,7 @@ QubitOS
 | backend | 状態 | 実体 |
 | :--- | :--- | :--- |
 | `cpu` | 常に利用可能 | 依存ライブラリなしの参照実装（既定） |
-| `gpu` | numpy がインストールされていれば利用可能 | `StateVector.apply` を numpy でベクトル化（CUDA/ROCm 対応の numpy や cupy を入れれば実デバイス実行に置き換え可能） |
+| `gpu` | numpy がインストールされていれば利用可能 | `StateVector.apply` を NumPy でCPU上でベクトル化。`gpu` は互換性のために残した名称で、実GPUドライバは未実装 |
 | `qnpu` | 常に未実装 | APQB/QBNN 専用プロセッサ（将来のハードウェア。ドライバは未実装） |
 
 未対応のバックエンドを選んでも例外にはならず、必ず `cpu` にフォールバックして理由を `dmesg` に記録します（Q-NPU は現状常にこの経路を通ります）。バックエンドの選択は数値結果に影響しません（`tests/test_backend.py` で cpu/gpu の出力を数値的に一致させています）。

@@ -3,7 +3,7 @@
  * the APQB scheduler (exploration rate eps = p_min + (p_max - p_min) * eta of
  * the system APQB), syscalls, filesystem and dmesg.
  */
-import { VirtualMachine, BOOT_ROM, BELL_ASSEMBLY, VMResult } from '../core/vm';
+import { BELL_ASSEMBLY, PC_EXAMPLE, VMResult } from '../core/vm';
 import { APQB, thetaFromR } from '../core/apqb';
 import { availableBackends, BackendInfo, resolveBackend } from '../core/backend';
 import { Circuit } from '../core/circuit';
@@ -83,6 +83,7 @@ export interface KernelOptions {
   seed?: number;
   theta?: number;
   fsSnapshot?: FSDir;
+  storageBytes?: number;
   /** Injectable for tests; defaults to the browser (or a no-op installer off the web). */
   webInstall?: WebInstaller;
   backend?: string;
@@ -120,9 +121,6 @@ export class Kernel {
   pc: APQBPersonalComputer;
 
   constructor(opts: KernelOptions = {}) {
-    this.bootReport = new VirtualMachine(64).run(BOOT_ROM, 0);
-    if (this.bootReport.registers[1] !== '42' || this.bootReport.registers[2] !== '1') throw new KernelError('QVM power-on self-test failed');
-    this.log('QVM64: integer, RAM and APQB self-tests passed; starting hosted QubitOS');
     const numQubits = opts.numQubits ?? 16;
     if (!Number.isInteger(numQubits) || numQubits < 1 || numQubits > 20) throw new KernelError('simulator supports 1..20 qubits');
     const theta = opts.theta ?? 0.2;
@@ -130,7 +128,9 @@ export class Kernel {
     this.hw = new QubitComputer(numQubits);
     this.numQubits = numQubits;
     this.pc = new APQBPersonalComputer(numQubits);
-    this.fs = new QubitFS(opts.fsSnapshot);
+    this.bootReport = this.pc.bootReport;
+    this.log('QVM64: integer, RAM and APQB self-tests passed; starting hosted QubitOS');
+    this.fs = new QubitFS(opts.fsSnapshot, opts.storageBytes);
     this.rng = new Rng(opts.seed);
     this.seed = opts.seed;
     this.sysctl = { 'apqb.theta': theta, 'sched.p_min': 0, 'sched.p_max': 0.5, 'hw.num_qubits': numQubits, 'run.shots': 1024, 'net.enabled': true, 'net.timeout_ms': 15000, 'net.retries': 2, 'net.registry': DEFAULT_REGISTRIES.join(','), 'hardware.backend': this.backendInfo.name };
@@ -139,15 +139,16 @@ export class Kernel {
     this.log(`hardware backend: ${this.backendInfo.name} (engine=${this.backendInfo.engine}) - ${this.backendInfo.detail}`);
     this.log(`system APQB theta=${theta.toFixed(3)} -> r=${Math.cos(2 * theta) >= 0 ? '+' : ''}${Math.cos(2 * theta).toFixed(3)} eta=${Math.abs(Math.sin(2 * theta)).toFixed(3)} (scheduler exploration eps=${this.explorationRate().toFixed(3)})`);
     this.log(`fs: ${opts.fsSnapshot ? 'restored snapshot' : 'fresh'}; ${Object.keys(this.programs).length} programs in /bin`);
-    for (const dir of ['/home/user/Documents', '/home/user/Desktop', '/home/user/Downloads', '/home/user/Examples']) this.fs.mkdir(dir);
+    for (const dir of ['/home/user/Documents', '/home/user/Desktop', '/home/user/Downloads', '/home/user/Examples', '/var/results']) this.fs.mkdir(dir);
     if (!this.fs.exists('/home/user/Examples/bell.qasm')) this.fs.write('/home/user/Examples/bell.qasm', BELL_ASSEMBLY);
+    if (!this.fs.exists('/home/user/Examples/pc-check.qasm')) this.fs.write('/home/user/Examples/pc-check.qasm', PC_EXAMPLE);
     this.fs.write('/etc/qvm-boot.json', JSON.stringify(this.bootReport, null, 2));
     this.programs.qvm = {
       name: 'qvm', description: 'Run QVM assembly with a simulated APQB coprocessor',
-      usage: 'qvm <file.qasm> [32|64]', params: [{ name: 'file', label: 'Assembly file', default: '/home/user/Examples/bell.qasm', kind: 'string' }],
+      usage: 'qvm <file.qasm> [64]', params: [{ name: 'file', label: 'Assembly file', default: '/home/user/Examples/bell.qasm', kind: 'string' }],
       job: (k, proc, args) => {
-        if (!args[0]) throw new Error('usage: qvm <file.qasm> [32|64]');
-        const result = new VirtualMachine(args[1] === undefined ? 64 : Number(args[1])).run(k.fs.read(args[0]), proc.seed);
+        if (!args[0] || args.length > 2 || (args[1] !== undefined && args[1] !== '64')) throw new Error('usage: qvm <file.qasm> [64]; the assembled PC is 64-bit only');
+        const result = k.pc.run(k, k.fs.read(args[0]), proc.seed, proc.pid);
         for (const line of result.output) proc.log(line);
         return result;
       },
@@ -162,6 +163,12 @@ export class Kernel {
       this.notify();
     });
     this.log(this.webInstall.summary());
+    // Restoring a disk must not silently overwrite previous run results after PID reset.
+    for (const name of this.fs.ls('/var/results')) {
+      const match = name.match(/^(\d+)_/);
+      if (match && Number.isSafeInteger(Number(match[1]))) this.nextPid = Math.max(this.nextPid, Number(match[1]) + 1);
+    }
+    this.fs.onChange = () => this.notify();
   }
 
   // ------------------------------------------------------------ events
@@ -403,7 +410,7 @@ export class Kernel {
         const circuit = proc.program.circuit(proc.argv);
         proc.circuit = circuit;
         if (circuit.numQubits > this.numQubits) throw new KernelError(`circuit needs ${circuit.numQubits} qubits, machine has ${this.numQubits}`);
-        const result = this.hw.run(circuit, proc.shots, proc.seed);
+        const result = this.runCircuitOnPool(circuit, proc.shots, proc.seed, proc.pid);
         proc.result = result;
         this.lastResult = result;
         proc.log(`ran '${circuit.name}' (${circuit.numQubits} qubits, depth ${circuit.depth}) shots=${proc.shots} in ${result.elapsedMs} ms`);
@@ -437,11 +444,18 @@ export class Kernel {
   }
 
   sysExecCircuit(circuit: Circuit, shots?: number, seed?: number): Result {
-    const result = this.hw.run(circuit, shots ?? Number(this.sysctl['run.shots']), seed);
+    const result = this.runCircuitOnPool(circuit, shots ?? Number(this.sysctl['run.shots']), seed);
     this.lastResult = result;
     this.log(`exec circuit '${circuit.name}' (${circuit.numQubits} qubits) shots=${result.shots}`);
     this.notify();
     return result;
+  }
+
+  /** Circuit jobs and QVM programs obey the same finite APQB resource pool. */
+  private runCircuitOnPool(circuit: Circuit, shots: number, seed?: number, owner: number | null = null): Result {
+    const segment = this.sysAlloc(circuit.numQubits, 'circuit-work', undefined, owner);
+    try { return this.hw.run(circuit, shots, seed); }
+    finally { this.sysFree(segment.sid); }
   }
 
   private saveResult(proc: Process): void {
@@ -454,6 +468,8 @@ export class Kernel {
       this.fs.writeJSON(`/var/results/${proc.pid}_${proc.name}.json`, payload);
     } catch (e) {
       if (!(e instanceof FSError)) throw e;
+      proc.log(`Result not saved: ${e.message}`);
+      this.log(`pid=${proc.pid}: result persistence failed: ${e.message}`);
     }
   }
 
