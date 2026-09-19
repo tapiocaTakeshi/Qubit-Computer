@@ -41,6 +41,7 @@ from ..apqb import APQB, theta_from_r
 from ..backend import BackendInfo
 from ..circuit import Circuit
 from ..computer import QubitComputer, Result
+from ..hardware import APQBPersonalComputer
 from ..state import APQBReadout, StateVector, concurrence, three_tangle
 from .fs import FSError, QubitFS
 from .programs import PROGRAMS, Program, parse_args
@@ -120,6 +121,7 @@ class Kernel:
         self._dmesg: List[str] = []
         self.backend_info: BackendInfo = backend_mod.resolve(backend, on_warning=self.log)
         self.hw = QubitComputer(max_qubits=num_qubits, backend=self.backend_info.name)
+        self.pc = APQBPersonalComputer(apqb_qubits=num_qubits, ram_qubits=num_qubits)
         self.num_qubits = num_qubits
         self.fs = QubitFS(fs_path)
         self.rng = random.Random(seed)
@@ -147,6 +149,7 @@ class Kernel:
             "ps": self.sys_ps, "run": self.sys_run, "exec_circuit": self.sys_exec_circuit,
             "sysctl": self.sys_sysctl, "dmesg": self.sys_dmesg, "uname": self.sys_uname,
             "backend": self.sys_backend,
+            "hardware": self.sys_hardware,
         }
         self.log(f"{OS_NAME} {OS_VERSION} booting on APQB hardware: {num_qubits} physical qubits")
         self.log(f"hardware backend: {self.backend_info.name.value} (engine={self.backend_info.engine}) "
@@ -155,6 +158,7 @@ class Kernel:
                  f"eta={abs(math.sin(2 * theta)):.3f} (scheduler exploration eps={self.exploration_rate():.3f})")
         self.log(f"fs: {'persistent ' + fs_path if fs_path else 'in-memory'}; {len(self.programs)} programs in /bin")
         self._refresh_bin()
+        self.pc.attach_kernel(self)
 
     # ------------------------------------------------------------ logging
     def log(self, line: str) -> None:
@@ -168,6 +172,11 @@ class Kernel:
         return {"os": OS_NAME, "version": OS_VERSION, "hardware": "APQB state-vector",
                 "backend": self.backend_info.name.value, "num_qubits": self.num_qubits,
                 "uptime": time.time() - self.boot_time, "programs": sorted(self.programs)}
+
+    def sys_hardware(self) -> Dict[str, Any]:
+        """Return the assembled APQB-PC component report."""
+        self.pc.backend = self.backend_info
+        return self.pc.report()
 
     # ------------------------------------------------------------ backend
     def sys_backend(self, name: Optional[str] = None) -> Any:
